@@ -1,0 +1,16 @@
+[package]
+name = "mini-sansio-dbus"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/iliabylich/mini-sansio-dbus"
+authors = ["Ilya Bylich <ibylich@gmail.com>"]
+description = "Sans-IO implementation of DBus protocol"
+
+[dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+pretty_env_logger = "0.5"
+log = "0.4"
+anyhow = "1.0"
