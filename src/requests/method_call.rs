@@ -15,7 +15,7 @@ pub struct MethodCall<In, Out, Data>
 where
     In: 'static,
     Out: 'static,
-    Data: Clone + Default + 'static,
+    Data: Clone + 'static,
 {
     send: &'static dyn Fn(In, Data) -> OutgoingMessage,
     try_process:
@@ -26,7 +26,7 @@ where
 
 impl<In, Out, Data> MethodCall<In, Out, Data>
 where
-    Data: Clone + Default,
+    Data: Clone,
 {
     pub fn with_data(self, data: Data) -> Self {
         Self {
@@ -37,14 +37,21 @@ where
         }
     }
 
-    pub fn send(&mut self, input: In, queue: &mut DBusQueue) {
+    pub fn send(&mut self, input: In, queue: &mut DBusQueue) -> Result<(), DBusError> {
         if !matches!(self.state, OneshotState::None) {
-            return;
+            return Ok(());
         };
 
-        let message: OutgoingMessage = (self.send)(input, self.data.clone().unwrap_or_default());
+        let message: OutgoingMessage = (self.send)(
+            input,
+            self.data
+                .as_ref()
+                .ok_or(DBusError::NoDataAttachedToMethodCall)?
+                .clone(),
+        );
         let reply_serial = queue.push_back(message);
         self.state = OneshotState::WaitingForReply(reply_serial);
+        Ok(())
     }
 
     pub fn try_recv(&mut self, message: IncomingMessage<'_>) -> Result<Option<Out>, DBusError> {
@@ -60,7 +67,14 @@ where
             MessageType::Error => Err(DBusError::DBusError(format!("{:?}", message.error_name))),
             MessageType::MethodReturn => {
                 if let Some(body) = message.body {
-                    Ok((self.try_process)(body, self.data.clone().unwrap_or_default()).ok())
+                    Ok((self.try_process)(
+                        body,
+                        self.data
+                            .as_ref()
+                            .ok_or(DBusError::NoDataAttachedToMethodCall)?
+                            .clone(),
+                    )
+                    .ok())
                 } else {
                     Ok(None)
                 }
@@ -84,7 +98,7 @@ where
 
 impl<In, Out, Data> core::fmt::Debug for MethodCall<In, Out, Data>
 where
-    Data: Clone + Default,
+    Data: Clone,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OneshotMethodCall")
@@ -100,7 +114,7 @@ pub struct OneshotMethodCallBuilder<In, Out, Data, S>
 where
     In: 'static,
     Out: 'static,
-    Data: Default + Clone + 'static,
+    Data: Clone + 'static,
 {
     send: &'static dyn Fn(In, Data) -> OutgoingMessage,
     _state: PhantomData<S>,
@@ -109,7 +123,7 @@ where
 
 impl<In, Out, Data> OneshotMethodCallBuilder<In, Out, Data, NeedsSend>
 where
-    Data: Default + Clone,
+    Data: Clone,
 {
     pub const fn send(
         self,
@@ -124,7 +138,7 @@ where
 }
 impl<In, Out, Data> OneshotMethodCallBuilder<In, Out, Data, NeedsTryProcess>
 where
-    Data: Default + Clone,
+    Data: Clone,
 {
     pub const fn try_process(
         self,
