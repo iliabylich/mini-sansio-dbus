@@ -7,6 +7,17 @@ pub struct DBusQueue {
 }
 
 impl DBusQueue {
+    pub const fn empty() -> Self {
+        Self {
+            serial: 1,
+            q: VecDeque::new(),
+        }
+    }
+
+    pub fn push_hello(&mut self) {
+        self.push_back(Hello::build());
+    }
+
     pub fn new() -> Self {
         let mut this = Self {
             serial: 1,
