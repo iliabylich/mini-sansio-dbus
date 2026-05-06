@@ -3,7 +3,9 @@ use crate::{
     interface_is, member_is, path_is,
 };
 
+/// Low-level introspection request received from `DBus`
 #[derive(Debug)]
+#[expect(missing_docs)]
 pub struct IntrospectRequest {
     pub serial: u32,
     pub destination: String,
@@ -47,9 +49,12 @@ impl TryFrom<IncomingMessage<'_>> for IntrospectRequest {
     }
 }
 
+/// Low-level introspection response to send to `DBus`
+#[derive(Debug)]
 pub struct IntrospectResponse;
 
 impl IntrospectResponse {
+    /// constructor
     pub fn build(
         reply_serial: u32,
         destination: impl Into<String>,

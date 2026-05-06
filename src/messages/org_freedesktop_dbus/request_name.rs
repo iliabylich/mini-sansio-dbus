@@ -1,8 +1,10 @@
 use crate::{OutgoingMessage, OutgoingValue};
 
+/// Represents a request to `DBus` to occupy some name
 pub struct RequestName;
 
 impl RequestName {
+    /// Constructor
     pub fn build(name: impl Into<String>) -> OutgoingMessage {
         OutgoingMessage::MethodCall {
             serial: 0,

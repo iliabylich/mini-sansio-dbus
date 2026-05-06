@@ -1,8 +1,10 @@
 use crate::{OutgoingMessage, OutgoingValue};
 
+/// Represents a request to unsubscriibe from some `DBus` changes. The opposite of `AddMatch`.
 pub struct RemoveMatch;
 
 impl RemoveMatch {
+    /// High-level constructor
     pub fn build(path: impl AsRef<str>) -> OutgoingMessage {
         Self::build_from_rule(format!(
             "type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='{}'",
@@ -10,6 +12,7 @@ impl RemoveMatch {
         ))
     }
 
+    /// Low-level constructor
     pub fn build_from_rule(rule: impl Into<String>) -> OutgoingMessage {
         OutgoingMessage::MethodCall {
             serial: 0,

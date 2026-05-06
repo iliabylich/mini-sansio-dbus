@@ -1,6 +1,7 @@
 use crate::{DBusError, incoming::Cursor, types::HeaderFieldCode};
 
 #[derive(Debug)]
+#[must_use]
 enum HeaderField<'a> {
     #[allow(dead_code)]
     Invalid,

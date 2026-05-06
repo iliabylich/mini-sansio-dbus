@@ -1,6 +1,7 @@
 use crate::{DBusError, incoming::Cursor};
 
 #[derive(Debug, Clone, Copy)]
+#[must_use]
 pub(crate) enum IncomingCompleteType<'a> {
     Byte,
     Bool,
@@ -71,7 +72,7 @@ impl<'a> IncomingCompleteType<'a> {
             ));
         } else if start == 'a' {
             let (item, remainder) = Self::cut(remainder)?;
-            let full = &buf[..item.buf().len() + 1];
+            let full = &buf[..=item.buf().len()];
             return Ok((
                 Self::Array {
                     full,
@@ -102,7 +103,7 @@ impl<'a> IncomingCompleteType<'a> {
         Ok((simple, remainder))
     }
 
-    pub(crate) fn buf(&self) -> &'a str {
+    pub(crate) const fn buf(&self) -> &'a str {
         match self {
             Self::Byte => "y",
             Self::Bool => "b",
@@ -208,25 +209,25 @@ impl<'a> IncomingCompleteType<'a> {
         Ok(bytesize)
     }
 
-    pub(crate) fn alignment(&self) -> usize {
+    pub(crate) const fn alignment(&self) -> usize {
         match self {
-            Self::Byte => 1,
-            Self::Bool => 4,
-            Self::Int16 => 2,
-            Self::UInt16 => 2,
-            Self::Int32 => 4,
-            Self::UInt32 => 4,
-            Self::Int64 => 8,
-            Self::UInt64 => 8,
-            Self::Double => 8,
-            Self::UnixFD => 4,
-            Self::String => 4,
-            Self::ObjectPath => 4,
-            Self::Signature => 1,
-            Self::Struct { .. } => 8,
-            Self::Array { .. } => 4,
-            Self::DictEntry { .. } => 8,
-            Self::Variant => 1,
+            Self::Byte | Self::Variant | Self::Signature => 1,
+
+            Self::Int16 | Self::UInt16 => 2,
+
+            Self::UnixFD
+            | Self::String
+            | Self::ObjectPath
+            | Self::Bool
+            | Self::Int32
+            | Self::UInt32
+            | Self::Array { .. } => 4,
+
+            Self::Int64
+            | Self::UInt64
+            | Self::Double
+            | Self::Struct { .. }
+            | Self::DictEntry { .. } => 8,
         }
     }
 }

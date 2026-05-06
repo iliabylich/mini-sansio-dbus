@@ -1,14 +1,17 @@
 use crate::{OutgoingMessage, OutgoingValue};
 
+/// Represents a request to subscribe to something in `DBus`
 pub struct AddMatch;
 
 impl AddMatch {
-    pub fn build(sender: String, path: String) -> OutgoingMessage {
+    /// constructor
+    pub fn build(sender: &str, path: &str) -> OutgoingMessage {
         Self::build_from_rule(format!(
             "type='signal',sender='{sender}',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='{path}'"
         ))
     }
 
+    /// low-level constructor
     pub fn build_from_rule(rule: String) -> OutgoingMessage {
         OutgoingMessage::MethodCall {
             serial: 0,

@@ -1,8 +1,10 @@
 use crate::{OutgoingMessage, OutgoingValue};
 
+/// Represents a request to get all object properties
 pub struct GetAllProperties;
 
 impl GetAllProperties {
+    /// constructor
     pub fn build(
         destination: impl Into<String>,
         path: impl Into<String>,

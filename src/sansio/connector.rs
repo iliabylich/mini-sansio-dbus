@@ -29,7 +29,7 @@ pub(crate) struct DBusConnector {
 }
 
 impl DBusConnector {
-    pub(crate) fn new(addr: sockaddr_un) -> Self {
+    pub(crate) const fn new(addr: sockaddr_un) -> Self {
         Self {
             fd: -1,
             state: State::ReadyTo(Action::Socket),
@@ -38,7 +38,7 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn dummy() -> Self {
+    pub(crate) const fn dummy() -> Self {
         Self {
             fd: -1,
             state: State::Dead,
@@ -50,7 +50,7 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn wants(&mut self) -> Option<Wants> {
+    pub(crate) const fn wants(&mut self) -> Option<Wants> {
         let State::ReadyTo(action) = self.state else {
             return None;
         };
@@ -63,8 +63,8 @@ impl DBusConnector {
 
             Action::Connect => Wants::Connect {
                 fd: self.fd,
-                addr: (&self.addr as *const sockaddr_un).cast::<sockaddr>(),
-                addrlen: core::mem::size_of::<sockaddr_un>() as u32,
+                addr: (&raw const self.addr).cast::<sockaddr>(),
+                addrlen: size_of::<sockaddr_un>() as u32,
             },
 
             Action::WriteZero => {
@@ -85,7 +85,7 @@ impl DBusConnector {
                 }
             }
 
-            Action::ReadData => Wants::Read {
+            Action::ReadData | Action::ReadGUID => Wants::Read {
                 fd: self.fd,
                 buf: self.buf.as_mut_ptr(),
                 len: self.buf.len(),
@@ -99,12 +99,6 @@ impl DBusConnector {
                     len: buf.len(),
                 }
             }
-
-            Action::ReadGUID => Wants::Read {
-                fd: self.fd,
-                buf: self.buf.as_mut_ptr(),
-                len: self.buf.len(),
-            },
 
             Action::WriteBegin => {
                 let buf = b"BEGIN\r\n";
@@ -235,7 +229,7 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn stop(&mut self) {
+    pub(crate) const fn stop(&mut self) {
         self.state = State::Dead;
     }
 }

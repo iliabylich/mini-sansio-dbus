@@ -1,8 +1,10 @@
 use crate::{OutgoingMessage, OutgoingValue};
 
+/// Represets a request to set a single property on a given `DBus` object
 pub struct SetProperty;
 
 impl SetProperty {
+    /// Constructor
     pub fn build(
         destination: impl Into<String>,
         path: impl Into<String>,

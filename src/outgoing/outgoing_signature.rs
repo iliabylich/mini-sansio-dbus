@@ -1,7 +1,9 @@
 use crate::OutgoingCompleteType;
 
+/// Signature of the value that is sent to `DBus`
 #[derive(PartialEq, Eq)]
 pub struct OutgoingSignature {
+    /// a body is a list, so a signature is a list as well that is mapped to values 1-to-1
     pub items: Vec<OutgoingCompleteType>,
 }
 

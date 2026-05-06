@@ -7,5 +7,6 @@ pub(crate) struct Header {
     pub(crate) _protocol_version: u8,
     pub(crate) body_len: u32,
     pub(crate) serial: u32,
+    #[expect(clippy::struct_field_names)]
     pub(crate) header_fields_len: u32,
 }

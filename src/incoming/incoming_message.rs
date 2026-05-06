@@ -4,7 +4,10 @@ use crate::{
     types::Header,
 };
 
+/// Received message
 #[derive(Clone, Copy)]
+#[must_use]
+#[expect(missing_docs)]
 pub struct IncomingMessage<'a> {
     pub message_type: MessageType,
     pub serial: u32,
@@ -35,7 +38,7 @@ impl<'a> IncomingMessage<'a> {
             serial,
             header_fields_len,
         } = Header::cut(&mut cur)?;
-        let message_type = MessageType::from_u8(message_type)?;
+        let message_type = MessageType::try_from(message_type)?;
 
         let headers = cur.take(header_fields_len as usize)?;
 
@@ -51,15 +54,16 @@ impl<'a> IncomingMessage<'a> {
             unix_fds,
         } = HeaderFields::cut(Cursor::new(headers, 0))?;
 
-        let mut body = None;
-        if let Some(signature) = signature {
+        let body = if let Some(signature) = signature {
             let body_padding = (8 - (header_fields_len as usize % 8)) % 8;
             let body_buf = cur
                 .buf()
                 .get(body_padding..body_padding + body_len as usize)
                 .ok_or(DBusError::MalformedBody)?;
-            body = Some(IncomingBody::new(signature, Cursor::new(body_buf, 0)));
-        }
+            Some(IncomingBody::new(signature, Cursor::new(body_buf, 0)))
+        } else {
+            None
+        };
 
         Ok(Self {
             message_type,
@@ -79,6 +83,11 @@ impl<'a> IncomingMessage<'a> {
         })
     }
 
+    /// Prints `self` to stderr
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any lazily parsed value inside `self` are invalid
     pub fn log(&self) -> Result<(), DBusError> {
         eprintln!("============");
         eprintln!("Type = {:?}", self.message_type);

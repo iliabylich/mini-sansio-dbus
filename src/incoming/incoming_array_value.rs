@@ -3,7 +3,9 @@ use crate::{
     incoming::{Cursor, IncomingCompleteType, IncomingValue},
 };
 
+/// Array value that is a part of incoming message
 #[derive(Debug)]
+#[must_use]
 pub struct IncomingArrayValue<'a> {
     item_type: IncomingCompleteType<'a>,
     cur: Cursor<'a>,
@@ -33,7 +35,8 @@ impl<'a> IncomingArrayValue<'a> {
         })
     }
 
-    pub fn iter(&self) -> IncomingArrayValueIter<'a> {
+    /// Returns an iterator over `self`
+    pub const fn items_iter(&self) -> IncomingArrayValueIter<'a> {
         IncomingArrayValueIter {
             item_type: self.item_type,
             cur: self.cur,
@@ -41,12 +44,19 @@ impl<'a> IncomingArrayValue<'a> {
     }
 }
 
+/// An iterator over `IncomingArrayValue`
+#[must_use]
 pub struct IncomingArrayValueIter<'a> {
     item_type: IncomingCompleteType<'a>,
     cur: Cursor<'a>,
 }
 
 impl<'a> IncomingArrayValueIter<'a> {
+    /// Returns the next item in `self`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the lazily parsed values is invalid.
     pub fn try_next(&mut self) -> Result<Option<IncomingValue<'a>>, DBusError> {
         if self.cur.buf().is_empty() {
             return Ok(None);

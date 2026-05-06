@@ -1,8 +1,10 @@
 use crate::{OutgoingMessage, OutgoingValue};
 
+/// Represents a request to get a single property of `DBus` object
 pub struct GetProperty;
 
 impl GetProperty {
+    /// Constructor
     pub fn build(
         destination: impl Into<String>,
         path: impl Into<String>,

@@ -70,7 +70,7 @@ impl DBusWriter {
                         "written is wrong: {bytes_written} vs {}",
                         message.len()
                     )));
-                };
+                }
 
                 if let Some(next) = queue.pop_front() {
                     self.current = Some(next);
@@ -85,7 +85,7 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn stop(&mut self) {
+    pub(crate) const fn stop(&mut self) {
         self.state = State::Dead;
     }
 }

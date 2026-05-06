@@ -3,7 +3,9 @@ use crate::{
     incoming::{Cursor, IncomingCompleteType},
 };
 
+/// Represents a received dict entry (a key/value pair)
 #[derive(Debug)]
+#[must_use]
 pub struct IncomingDictEntryValue<'a> {
     key_type: IncomingCompleteType<'a>,
     value_type: IncomingCompleteType<'a>,
@@ -12,7 +14,7 @@ pub struct IncomingDictEntryValue<'a> {
 
 impl<'a> IncomingDictEntryValue<'a> {
     pub(crate) fn cut(
-        cur: &mut Cursor<'a>,
+        cur: &Cursor<'a>,
         key_sig: &'a str,
         value_sig: &'a str,
     ) -> Result<Self, DBusError> {
@@ -33,6 +35,11 @@ impl<'a> IncomingDictEntryValue<'a> {
         })
     }
 
+    /// Returns key and value of `self`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any lazily parsed value inside `self` is invalid
     pub fn key_value(&self) -> Result<(IncomingValue<'a>, IncomingValue<'a>), DBusError> {
         let mut cur = self.cur;
         let key = IncomingValue::cut(&mut cur, self.key_type)?;

@@ -1,8 +1,10 @@
 use crate::OutgoingMessage;
 
+/// Represents a starting "hello" message that is sent to `DBus`
 pub struct Hello;
 
 impl Hello {
+    /// Constructor
     pub fn build() -> OutgoingMessage {
         OutgoingMessage::MethodCall {
             serial: 0,

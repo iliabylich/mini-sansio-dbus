@@ -5,15 +5,23 @@ use crate::{
     value_is,
 };
 
+/// A helper object to provide `DBus` introspection
+#[must_use]
 pub struct IntrospectibleObjectAt {
     destination: &'static str,
 }
 
 impl IntrospectibleObjectAt {
-    pub fn new(destination: &'static str) -> Self {
+    /// constructor
+    pub const fn new(destination: &'static str) -> Self {
         Self { destination }
     }
 
+    /// Tries to process incoming message
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if message doesn't belong to instrospection protocol or invalid.
     pub fn handle<'a>(
         &self,
         message: IncomingMessage<'a>,
@@ -79,7 +87,9 @@ impl IntrospectibleObjectAt {
     }
 }
 
+/// An incoming introspection request, must be handled by you
 #[derive(Debug)]
+#[expect(missing_docs)]
 pub enum IntrospectibleObjectAtRequest<'a> {
     Introspect {
         path: &'a str,

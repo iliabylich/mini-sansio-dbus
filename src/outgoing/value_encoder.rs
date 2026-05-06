@@ -12,7 +12,7 @@ impl ValueEncoder {
     }
 
     pub(crate) fn encode_bool(buf: &mut EncodingBuffer, value: bool) {
-        Self::encode_u32(buf, if value { 1_u32 } else { 0 });
+        Self::encode_u32(buf, u32::from(value));
     }
 
     pub(crate) fn encode_u16(buf: &mut EncodingBuffer, value: u16) {
@@ -127,11 +127,12 @@ impl ValueEncoder {
             OutgoingValue::Int16(value) => Self::encode_i16(buf, *value),
             OutgoingValue::UInt16(value) => Self::encode_u16(buf, *value),
             OutgoingValue::Int32(value) => Self::encode_i32(buf, *value),
-            OutgoingValue::UInt32(value) => Self::encode_u32(buf, *value),
+            OutgoingValue::UInt32(value) | OutgoingValue::UnixFD(value) => {
+                Self::encode_u32(buf, *value);
+            }
             OutgoingValue::Int64(value) => Self::encode_i64(buf, *value),
             OutgoingValue::UInt64(value) => Self::encode_u64(buf, *value),
             OutgoingValue::Double(value) => Self::encode_f64(buf, *value),
-            OutgoingValue::UnixFD(value) => Self::encode_u32(buf, *value),
             OutgoingValue::String(s) => Self::encode_string(buf, s),
             OutgoingValue::ObjectPath(path) => Self::encode_object_path(buf, path),
             OutgoingValue::Signature(sig) => Self::encode_signature(buf, sig),

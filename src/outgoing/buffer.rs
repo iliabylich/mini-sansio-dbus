@@ -4,11 +4,11 @@ pub(crate) struct EncodingBuffer {
 }
 
 impl EncodingBuffer {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self { buf: vec![] }
     }
 
-    pub(crate) fn size(&self) -> usize {
+    pub(crate) const fn size(&self) -> usize {
         self.buf.len()
     }
 
@@ -19,7 +19,7 @@ impl EncodingBuffer {
     }
 
     pub(crate) fn encode_u8(&mut self, value: u8) {
-        self.buf.push(value)
+        self.buf.push(value);
     }
 
     pub(crate) fn encode_u16(&mut self, value: u16) {

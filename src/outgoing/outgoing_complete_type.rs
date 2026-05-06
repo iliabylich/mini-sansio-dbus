@@ -1,4 +1,6 @@
+/// A type of outgoing (sent) `DBus` value
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(missing_docs)]
 pub enum OutgoingCompleteType {
     Byte,
     Bool,
@@ -14,32 +16,30 @@ pub enum OutgoingCompleteType {
     String,
     ObjectPath,
     Signature,
-    Struct(Vec<OutgoingCompleteType>),
-    Array(Box<OutgoingCompleteType>),
-    DictEntry(Box<OutgoingCompleteType>, Box<OutgoingCompleteType>),
+    Struct(Vec<Self>),
+    Array(Box<Self>),
+    DictEntry(Box<Self>, Box<Self>),
     Variant,
 }
 
 impl OutgoingCompleteType {
-    pub(crate) fn alignment(&self) -> usize {
+    pub(crate) const fn alignment(&self) -> usize {
         match self {
-            Self::Byte => 1,
-            Self::Bool => 4,
-            Self::Int16 => 2,
-            Self::UInt16 => 2,
-            Self::Int32 => 4,
-            Self::UInt32 => 4,
-            Self::Int64 => 8,
-            Self::UInt64 => 8,
-            Self::Double => 8,
-            Self::UnixFD => 4,
-            Self::String => 4,
-            Self::ObjectPath => 4,
-            Self::Signature => 1,
-            Self::Struct(_) => 8,
-            Self::Array(_) => 4,
-            Self::DictEntry(_, _) => 8,
-            Self::Variant => 1,
+            Self::Byte | Self::Signature | Self::Variant => 1,
+
+            Self::Int16 | Self::UInt16 => 2,
+
+            Self::Bool
+            | Self::Int32
+            | Self::UInt32
+            | Self::UnixFD
+            | Self::String
+            | Self::ObjectPath
+            | Self::Array(_) => 4,
+
+            Self::Int64 | Self::UInt64 | Self::Double | Self::Struct(_) | Self::DictEntry(_, _) => {
+                8
+            }
         }
     }
 }

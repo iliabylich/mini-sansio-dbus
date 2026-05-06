@@ -1,25 +1,26 @@
 use crate::DBusError;
 
 #[derive(Clone, Copy, Debug)]
+#[must_use]
 pub(crate) struct Cursor<'a> {
     buf: &'a [u8],
     offset: usize,
 }
 
 impl<'a> Cursor<'a> {
-    pub(crate) fn new(buf: &'a [u8], offset: usize) -> Self {
+    pub(crate) const fn new(buf: &'a [u8], offset: usize) -> Self {
         Self { buf, offset }
     }
 
-    pub(crate) fn buf(&self) -> &'a [u8] {
+    pub(crate) const fn buf(&self) -> &'a [u8] {
         self.buf
     }
 
-    pub(crate) fn offset(&self) -> usize {
+    pub(crate) const fn offset(&self) -> usize {
         self.offset
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(crate) const fn is_empty(&self) -> bool {
         self.buf.is_empty()
     }
 

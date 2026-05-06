@@ -1,6 +1,6 @@
 use crate::{DBusError, Satisfy, Wants, types::Header};
 
-const HEADER_LEN: usize = core::mem::size_of::<Header>();
+const HEADER_LEN: usize = size_of::<Header>();
 
 pub(crate) struct DBusReader {
     fd: i32,
@@ -23,7 +23,7 @@ enum Action {
 }
 
 impl DBusReader {
-    pub(crate) fn new(fd: i32) -> Self {
+    pub(crate) const fn new(fd: i32) -> Self {
         Self {
             fd,
             bytes_read: 0,
@@ -70,7 +70,7 @@ impl DBusReader {
         let action = match self.state {
             State::WaitingFor(action) => action,
             State::Dead => return Ok(None),
-            state => {
+            state @ State::ReadyTo(_) => {
                 return Err(DBusError::InternalError(format!(
                     "malformed state: {state:?} vs {satisfy:?}"
                 )));
@@ -121,12 +121,11 @@ impl DBusReader {
                     self.message_len = 0;
                     self.state = State::ReadyTo(Action::ReadHeader);
 
-                    return Ok(Some(message_len));
+                    Ok(Some(message_len))
                 } else {
                     self.state = State::ReadyTo(Action::ReadBody);
+                    Ok(None)
                 }
-
-                Ok(None)
             }
 
             (_, _) => Err(DBusError::InternalError(format!(
@@ -135,7 +134,7 @@ impl DBusReader {
         }
     }
 
-    pub(crate) fn stop(&mut self) {
+    pub(crate) const fn stop(&mut self) {
         self.state = State::Dead;
     }
 }

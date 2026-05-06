@@ -11,6 +11,8 @@ mod queue;
 mod reader;
 mod writer;
 
+/// A `DBus` connection, the main type
+#[must_use]
 pub struct DBusConnection {
     state: State,
 }
@@ -24,23 +26,31 @@ enum State {
 }
 
 impl DBusConnection {
-    fn new(addr: sockaddr_un) -> Self {
+    const fn new(addr: sockaddr_un) -> Self {
         Self {
             state: State::Connecting(DBusConnector::new(addr)),
         }
     }
 
-    pub fn dummy() -> Self {
+    /// Constructs a dummy connection that doesn't "want" anything from you
+    ///
+    /// Can be used as a fallback if things go wrong.
+    pub const fn dummy() -> Self {
         Self {
             state: State::Connecting(DBusConnector::dummy()),
         }
     }
 
+    /// Constructs a new session connection
+    ///
+    /// # Errors
+    ///
+    /// Fails if `$DBUS_SESSION_BUS_ADDRESS` env variable isn't set
     pub fn new_session() -> Result<Self, DBusError> {
         let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")
             .map_err(|_| DBusError::NoSessionBusAddress)?;
         let (_, path) = address
-            .split_once("=")
+            .split_once('=')
             .ok_or(DBusError::MalformedSessionBusAddress)?;
 
         let addr = new_unix_socket(path.as_bytes());
@@ -48,11 +58,12 @@ impl DBusConnection {
         Ok(Self::new(addr))
     }
 
+    /// Constructs a new system connection
     pub fn new_system() -> Self {
         fn socket_path() -> String {
             std::env::var("DBUS_SYSTEM_BUS_ADDRESS")
                 .ok()
-                .and_then(|address| address.split_once("=").map(|(_, path)| path.to_string()))
+                .and_then(|address| address.split_once('=').map(|(_, path)| path.to_string()))
                 .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"))
         }
 
@@ -61,6 +72,9 @@ impl DBusConnection {
         Self::new(addr)
     }
 
+    /// Returns what connection wants at the moment
+    ///
+    /// Returned value must be parsed and converted to a syscall of some sort
     pub fn wants(&mut self, queue: &mut DBusQueue, readbuf: &mut Vec<u8>) -> Option<Wants> {
         match &mut self.state {
             State::Connecting(connector) => connector.wants(),
@@ -93,6 +107,11 @@ impl DBusConnection {
         }
     }
 
+    /// Notifies about completion of a previously requested operation
+    ///
+    /// # Errors
+    ///
+    /// Fails is operation is not the one that was last returned from `wants`
     pub fn satisfy<'a>(
         &mut self,
         satisfy: Satisfy,
@@ -136,7 +155,8 @@ impl DBusConnection {
         }
     }
 
-    pub fn stop(&mut self) {
+    /// Stops connection
+    pub const fn stop(&mut self) {
         match &mut self.state {
             State::Connecting(connector) => connector.stop(),
             State::Ready { reader, writer } => {

@@ -4,7 +4,10 @@ use crate::{
     incoming::{Cursor, IncomingCompleteType},
 };
 
+/// Represents an abstract received value
 #[derive(Debug)]
+#[must_use]
+#[expect(missing_docs)]
 pub enum IncomingValue<'a> {
     Byte(u8),
     Bool(bool),
@@ -74,13 +77,18 @@ impl<'a> IncomingValue<'a> {
                 key: key_type,
                 value: value_type,
                 ..
-            } => Self::DictEntry(IncomingDictEntryValue::cut(&mut cur, key_type, value_type)?),
+            } => Self::DictEntry(IncomingDictEntryValue::cut(&cur, key_type, value_type)?),
             IncomingCompleteType::Variant => Self::Variant(IncomingVariantValue::new(cur)),
         };
 
         Ok(value)
     }
 
+    /// Prints `self` to stderr
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if some parts of the message that are parsed in a lazy manner are invalid
     pub fn log(&self, indent: usize) -> Result<(), DBusError> {
         let offset = " ".repeat(indent);
 
@@ -99,14 +107,14 @@ impl<'a> IncomingValue<'a> {
             Self::ObjectPath(path) => eprintln!("{offset}path: {path:?}"),
             Self::Signature(signature) => eprintln!("{offset}signature: {signature:?}"),
             Self::Struct(struct_) => {
-                let mut iter = struct_.iter()?;
+                let mut iter = struct_.fields_iter()?;
                 eprintln!("{offset}struct:");
                 while let Some(item) = iter.try_next()? {
                     item.log(indent + 4)?;
                 }
             }
             Self::Array(array) => {
-                let mut iter = array.iter();
+                let mut iter = array.items_iter();
                 eprintln!("{offset}array:");
                 while let Some(item) = iter.try_next()? {
                     item.log(indent + 4)?;

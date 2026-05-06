@@ -1,6 +1,10 @@
+/// a module with `DBus` introspection request/response objects
 pub mod introspect;
+
+/// a module with built-in `DBus` request/response objects
 pub mod org_freedesktop_dbus;
 
+/// compares given interfaces and returns an error if they are different
 #[macro_export]
 macro_rules! interface_is {
     ($interface:expr, $expected:expr) => {{
@@ -14,6 +18,7 @@ macro_rules! interface_is {
     }};
 }
 
+/// compares given destinations and returns an error if they are different
 #[macro_export]
 macro_rules! destination_is {
     ($destination:expr, $expected:expr) => {{
@@ -27,6 +32,7 @@ macro_rules! destination_is {
     }};
 }
 
+/// compares given senders and returns an error if they are different
 #[macro_export]
 macro_rules! sender_is {
     ($sender:expr, $expected:expr) => {{
@@ -40,6 +46,7 @@ macro_rules! sender_is {
     }};
 }
 
+/// compares given paths and returns an error if they are different
 #[macro_export]
 macro_rules! path_is {
     ($path:expr, $expected:expr) => {{
@@ -53,6 +60,7 @@ macro_rules! path_is {
     }};
 }
 
+/// compares given members and returns an error if they are different
 #[macro_export]
 macro_rules! member_is {
     ($member:expr, $expected:expr) => {{
@@ -66,6 +74,7 @@ macro_rules! member_is {
     }};
 }
 
+/// compares given values and returns an error if they are different
 #[macro_export]
 macro_rules! value_is {
     ($value:expr, $pat:pat) => {

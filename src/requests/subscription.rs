@@ -12,6 +12,8 @@ enum SubscriptionState {
     Subscribed(String),
 }
 
+/// A helper to subscribe to a `PropertiesChanged` signal and process a stream of incoming updates
+#[must_use]
 pub struct Subscription<T>
 where
     T: 'static,
@@ -31,24 +33,26 @@ impl<T> Subscription<T> {
         queue.push_back(message);
     }
 
-    fn subscribe(&mut self, sender: String, path: String, queue: &mut DBusQueue) {
-        let message = AddMatch::build(sender, path.clone());
+    fn subscribe(&mut self, sender: &str, path: String, queue: &mut DBusQueue) {
+        let message = AddMatch::build(sender, &path);
         queue.push_back(message);
         self.state = SubscriptionState::Subscribed(path);
     }
 
+    /// Sends a "subscribe" request
     pub fn start(
         &mut self,
-        sender: impl Into<String>,
+        sender: impl AsRef<str>,
         path: impl Into<String>,
         queue: &mut DBusQueue,
     ) {
         self.unsubscribe(queue);
-        self.subscribe(sender.into(), path.into(), queue);
+        self.subscribe(sender.as_ref(), path.into(), queue);
     }
 
+    /// Unsubscribes and resets internal state
     pub fn reset(&mut self, queue: &mut DBusQueue) {
-        self.unsubscribe(queue)
+        self.unsubscribe(queue);
     }
 
     fn try_process(&self, message: IncomingMessage<'_>) -> Result<T, Box<dyn core::error::Error>> {
@@ -73,10 +77,23 @@ impl<T> Subscription<T> {
         (self.try_process)(body, path.to_string(), subscribed_to)
     }
 
+    /// Processes incoming message, return whatever is returned from a given `try_process` function.
+    #[must_use]
     pub fn process(&self, message: IncomingMessage<'_>) -> Option<T> {
         self.try_process(message).ok()
     }
 
+    /// A builder patter:
+    ///
+    /// ```ignore
+    /// let sub = Subscription::new(|body, path, subscribed_to| { /* process message and return anything */ 42 })
+    /// sub.start()
+    /// loop {
+    ///     if let Some(output) = sub.try_process(stream.read_message()) {
+    ///         assert_eq!(output, 42)
+    ///     }
+    /// }
+    /// ```
     pub const fn new(
         try_process: &'static dyn Fn(
             IncomingBody<'_>,
@@ -84,7 +101,7 @@ impl<T> Subscription<T> {
             String,
         ) -> Result<T, Box<dyn core::error::Error>>,
     ) -> Self {
-        Subscription {
+        Self {
             try_process,
             state: SubscriptionState::None,
         }

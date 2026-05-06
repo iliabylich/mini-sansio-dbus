@@ -84,7 +84,7 @@ impl MessageEncoder {
             if !body.is_empty() {
                 buf.align(8);
                 let signature = OutgoingSignature {
-                    items: body.iter().map(|v| v.complete_type()).collect(),
+                    items: body.iter().map(OutgoingValue::complete_type).collect(),
                 };
                 let mut sig_buf = EncodingBuffer::new();
                 SignatureEncoder::encode_signature(&mut sig_buf, &signature);

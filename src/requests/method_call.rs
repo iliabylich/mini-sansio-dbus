@@ -11,6 +11,36 @@ enum OneshotState {
     ReplyReceived,
 }
 
+/// An "incomplete" method call that must be filled with data
+#[must_use]
+pub struct IncompleteMethodCall<In, Out, Data>
+where
+    In: 'static,
+    Out: 'static,
+    Data: Clone + 'static,
+{
+    send: &'static dyn Fn(In, Data) -> OutgoingMessage,
+    try_process:
+        &'static dyn Fn(IncomingBody<'_>, Data) -> Result<Out, Box<dyn core::error::Error>>,
+}
+
+impl<In, Out, Data> IncompleteMethodCall<In, Out, Data>
+where
+    Data: Clone,
+{
+    /// Fills `self` with data, makes it send-able
+    pub fn with_data(self, data: Data) -> MethodCall<In, Out, Data> {
+        MethodCall {
+            send: self.send,
+            try_process: self.try_process,
+            state: OneshotState::None,
+            data,
+        }
+    }
+}
+
+/// A "complete" method call, can be sent
+#[must_use]
 pub struct MethodCall<In, Out, Data>
 where
     In: 'static,
@@ -21,39 +51,48 @@ where
     try_process:
         &'static dyn Fn(IncomingBody<'_>, Data) -> Result<Out, Box<dyn core::error::Error>>,
     state: OneshotState,
-    data: Option<Data>,
+    data: Data,
 }
 
 impl<In, Out, Data> MethodCall<In, Out, Data>
 where
     Data: Clone,
 {
-    pub fn with_data(self, data: Data) -> Self {
-        Self {
-            send: self.send,
-            try_process: self.try_process,
-            state: self.state,
-            data: Some(data),
+    /// This is a builder pattern:
+    ///
+    /// ```ignore
+    /// let reply = MethodCall::new(|input, data| { /* build request */ })
+    ///     .try_process(|body, data| { /* parse and validate response */ 42 } )
+    ///     .with_data("any object here");
+    /// assert_eq!(reply, 42);
+    /// ```
+    #[expect(clippy::new_ret_no_self)]
+    pub const fn new(
+        send: &'static dyn Fn(In, Data) -> OutgoingMessage,
+    ) -> OneshotMethodCallBuilder<In, Out, Data, NeedsTryProcess> {
+        OneshotMethodCallBuilder {
+            send,
+            _state: PhantomData,
+            _out: PhantomData,
         }
     }
 
-    pub fn send(&mut self, input: In, queue: &mut DBusQueue) -> Result<(), DBusError> {
+    /// Writes a message to a given `queue`
+    pub fn send(&mut self, input: In, queue: &mut DBusQueue) {
         if !matches!(self.state, OneshotState::None) {
-            return Ok(());
-        };
+            return;
+        }
 
-        let message: OutgoingMessage = (self.send)(
-            input,
-            self.data
-                .as_ref()
-                .ok_or(DBusError::NoDataAttachedToMethodCall)?
-                .clone(),
-        );
+        let message: OutgoingMessage = (self.send)(input, self.data.clone());
         let reply_serial = queue.push_back(message);
         self.state = OneshotState::WaitingForReply(reply_serial);
-        Ok(())
     }
 
+    /// Tries to process incoming message
+    ///
+    /// # Errors
+    ///
+    /// Fails is `serial` of the message matches but it's not a `MethodReturn`
     pub fn try_recv(&mut self, message: IncomingMessage<'_>) -> Result<Option<Out>, DBusError> {
         let OneshotState::WaitingForReply(reply_serial) = self.state else {
             return Ok(None);
@@ -67,14 +106,7 @@ where
             MessageType::Error => Err(DBusError::DBusError(format!("{:?}", message.error_name))),
             MessageType::MethodReturn => {
                 if let Some(body) = message.body {
-                    Ok((self.try_process)(
-                        body,
-                        self.data
-                            .as_ref()
-                            .ok_or(DBusError::NoDataAttachedToMethodCall)?
-                            .clone(),
-                    )
-                    .ok())
+                    Ok((self.try_process)(body, self.data.clone()).ok())
                 } else {
                     Ok(None)
                 }
@@ -83,16 +115,9 @@ where
         }
     }
 
-    pub fn reset(&mut self) {
-        self.state = OneshotState::None
-    }
-
-    pub const fn builder() -> OneshotMethodCallBuilder<In, Out, Data, NeedsSend> {
-        OneshotMethodCallBuilder {
-            send: &|_: In, _: Data| todo!(),
-            _state: PhantomData,
-            _out: PhantomData,
-        }
+    /// Resets `self` which lets it to be sent again
+    pub const fn reset(&mut self) {
+        self.state = OneshotState::None;
     }
 }
 
@@ -103,11 +128,10 @@ where
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OneshotMethodCall")
             .field("state", &self.state)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
-pub struct NeedsSend;
 pub struct NeedsTryProcess;
 
 pub struct OneshotMethodCallBuilder<In, Out, Data, S>
@@ -121,21 +145,6 @@ where
     _out: PhantomData<Out>,
 }
 
-impl<In, Out, Data> OneshotMethodCallBuilder<In, Out, Data, NeedsSend>
-where
-    Data: Clone,
-{
-    pub const fn send(
-        self,
-        send: &'static dyn Fn(In, Data) -> OutgoingMessage,
-    ) -> OneshotMethodCallBuilder<In, Out, Data, NeedsTryProcess> {
-        OneshotMethodCallBuilder {
-            send,
-            _state: PhantomData,
-            _out: PhantomData,
-        }
-    }
-}
 impl<In, Out, Data> OneshotMethodCallBuilder<In, Out, Data, NeedsTryProcess>
 where
     Data: Clone,
@@ -146,12 +155,10 @@ where
             IncomingBody<'_>,
             Data,
         ) -> Result<Out, Box<dyn core::error::Error>>,
-    ) -> MethodCall<In, Out, Data> {
-        MethodCall {
+    ) -> IncompleteMethodCall<In, Out, Data> {
+        IncompleteMethodCall {
             send: self.send,
             try_process,
-            state: OneshotState::None,
-            data: None,
         }
     }
 }

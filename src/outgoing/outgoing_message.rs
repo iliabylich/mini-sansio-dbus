@@ -1,6 +1,9 @@
 use crate::{MessageType, OutgoingValue};
 
+/// Represents a request that you send to `DBus`
 #[derive(Debug, PartialEq)]
+#[must_use]
+#[expect(missing_docs)]
 pub enum OutgoingMessage {
     MethodCall {
         destination: Option<String>,
@@ -32,7 +35,9 @@ pub enum OutgoingMessage {
 }
 
 impl OutgoingMessage {
-    pub fn serial(&self) -> u32 {
+    /// Serial of the message
+    #[must_use]
+    pub const fn serial(&self) -> u32 {
         match self {
             Self::MethodCall { serial, .. }
             | Self::MethodReturn { serial, .. }
@@ -40,7 +45,9 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn serial_mut(&mut self) -> &mut u32 {
+    /// Serial (mutable) of the message
+    #[must_use]
+    pub const fn serial_mut(&mut self) -> &mut u32 {
         match self {
             Self::MethodCall { serial, .. }
             | Self::MethodReturn { serial, .. }
@@ -48,7 +55,8 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn message_type(&self) -> MessageType {
+    /// A type
+    pub const fn message_type(&self) -> MessageType {
         match self {
             Self::MethodCall { .. } => MessageType::MethodCall,
             Self::MethodReturn { .. } => MessageType::MethodReturn,
@@ -56,21 +64,27 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn path(&self) -> Option<&str> {
+    /// `Path` header field
+    #[must_use]
+    pub const fn path(&self) -> Option<&str> {
         match self {
             Self::MethodCall { path, .. } => Some(path.as_str()),
             _ => None,
         }
     }
 
-    pub fn member(&self) -> Option<&str> {
+    /// `Member` header field
+    #[must_use]
+    pub const fn member(&self) -> Option<&str> {
         match self {
             Self::MethodCall { member, .. } => Some(member.as_str()),
             _ => None,
         }
     }
 
-    pub fn interface(&self) -> Option<&str> {
+    /// `Interface` header field
+    #[must_use]
+    pub const fn interface(&self) -> Option<&str> {
         match self {
             Self::MethodCall {
                 interface: Some(interface),
@@ -80,23 +94,29 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn error_name(&self) -> Option<&str> {
+    /// `ErrorName` header field
+    #[must_use]
+    pub const fn error_name(&self) -> Option<&str> {
         match self {
-            Self::Error { error_name, .. } => Some(error_name.as_ref()),
+            Self::Error { error_name, .. } => Some(error_name.as_str()),
             _ => None,
         }
     }
 
-    pub fn reply_serial(&self) -> Option<u32> {
+    /// `ReplySerial` header field
+    #[must_use]
+    pub const fn reply_serial(&self) -> Option<u32> {
         match self {
             Self::MethodReturn { reply_serial, .. } | Self::Error { reply_serial, .. } => {
                 Some(*reply_serial)
             }
-            _ => None,
+            Self::MethodCall { .. } => None,
         }
     }
 
-    pub fn destination(&self) -> Option<&str> {
+    /// `Destination` header field
+    #[must_use]
+    pub const fn destination(&self) -> Option<&str> {
         match self {
             Self::MethodCall {
                 destination: Some(destination),
@@ -114,7 +134,9 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn sender(&self) -> Option<&str> {
+    /// `Sender` header field
+    #[must_use]
+    pub const fn sender(&self) -> Option<&str> {
         match self {
             Self::MethodCall {
                 sender: Some(sender),
@@ -132,15 +154,18 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn body(&self) -> &[OutgoingValue] {
+    /// A body
+    pub const fn body(&self) -> &[OutgoingValue] {
         match self {
             Self::MethodCall { body, .. }
             | Self::MethodReturn { body, .. }
-            | Self::Error { body, .. } => body,
+            | Self::Error { body, .. } => body.as_slice(),
         }
     }
 
-    pub fn unix_fds(&self) -> Option<u32> {
+    /// `UnixFDs` header field
+    #[must_use]
+    pub const fn unix_fds(&self) -> Option<u32> {
         match self {
             Self::MethodCall { unix_fds, .. }
             | Self::MethodReturn { unix_fds, .. }
@@ -148,8 +173,9 @@ impl OutgoingMessage {
         }
     }
 
+    /// Constructs an empty "ok" reply
     pub fn new_method_return_no_body(reply_serial: u32, destination: impl Into<String>) -> Self {
-        OutgoingMessage::MethodReturn {
+        Self::MethodReturn {
             serial: 0,
             reply_serial,
             destination: Some(destination.into()),
@@ -159,8 +185,9 @@ impl OutgoingMessage {
         }
     }
 
+    /// Constructs an empty "err" reply with "no such method" description
     pub fn new_err_no_method(reply_serial: u32, destination: impl Into<String>) -> Self {
-        OutgoingMessage::Error {
+        Self::Error {
             serial: 0,
             error_name: String::from("org.freedesktop.DBus.Error.UnknownMethod"),
             reply_serial,

@@ -1,6 +1,9 @@
 use crate::OutgoingCompleteType;
 
+/// An abstract value that is sent to `DBus` (either in the header field or in the body)
 #[derive(Debug, PartialEq, Clone)]
+#[must_use]
+#[expect(missing_docs)]
 pub enum OutgoingValue {
     Byte(u8),
     Bool(bool),
@@ -16,10 +19,10 @@ pub enum OutgoingValue {
     String(String),
     ObjectPath(String),
     Signature(Vec<u8>),
-    Struct(Vec<OutgoingValue>),
-    Array(OutgoingCompleteType, Vec<OutgoingValue>),
-    DictEntry(Box<OutgoingValue>, Box<OutgoingValue>),
-    Variant(Box<OutgoingValue>),
+    Struct(Vec<Self>),
+    Array(OutgoingCompleteType, Vec<Self>),
+    DictEntry(Box<Self>, Box<Self>),
+    Variant(Box<Self>),
 }
 
 impl OutgoingValue {
@@ -47,9 +50,7 @@ impl OutgoingValue {
             }
             Self::Array(item_type, items) => {
                 for item in items {
-                    if item.complete_type() != *item_type {
-                        panic!("heterogenous array")
-                    }
+                    assert!(item.complete_type() == *item_type, "heterogenous array");
                 }
                 OutgoingCompleteType::Array(Box::new(item_type.clone()))
             }
