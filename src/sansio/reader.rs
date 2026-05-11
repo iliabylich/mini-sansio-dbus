@@ -1,4 +1,4 @@
-use crate::{DBusError, DBusSatisfy, DBusWants, types::Header};
+use crate::{DBusError, DBusWants, types::Header};
 
 const HEADER_LEN: usize = size_of::<Header>();
 
@@ -59,14 +59,13 @@ impl DBusReader {
         }
     }
 
-    pub(crate) fn satisfy(
+    pub(crate) fn satisfy_read(
         &mut self,
-        satisfy: DBusSatisfy,
         res: i32,
         buf: &[u8],
     ) -> Result<Option<usize>, DBusError> {
-        match (&mut self.state, satisfy) {
-            (State::ReadHeader { bytes_read }, DBusSatisfy::Read) => {
+        match &mut self.state {
+            State::ReadHeader { bytes_read } => {
                 if res < 0 {
                     return Err(DBusError::ReadError(format!("ReadHeader failed: {res}")));
                 }
@@ -91,13 +90,10 @@ impl DBusReader {
                 Ok(None)
             }
 
-            (
-                State::ReadBody {
-                    message_len,
-                    bytes_read,
-                },
-                DBusSatisfy::Read,
-            ) => {
+            State::ReadBody {
+                message_len,
+                bytes_read,
+            } => {
                 if res < 0 {
                     return Err(DBusError::ReadError(format!("ReadBody failed: {res}")));
                 }
@@ -114,9 +110,7 @@ impl DBusReader {
                 }
             }
 
-            (state, _) => Err(DBusError::InternalError(format!(
-                "malformed state: {state:?} vs {satisfy:?}"
-            ))),
+            State::Dead => Ok(None),
         }
     }
 

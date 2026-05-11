@@ -138,7 +138,7 @@ impl DBusConnection {
 
             State::Ready { reader, writer } => match satisfy {
                 DBusSatisfy::Read => {
-                    let Some(len) = reader.satisfy(satisfy, res, readbuf)? else {
+                    let Some(len) = reader.satisfy_read(res, readbuf)? else {
                         return Ok(None);
                     };
                     let buf = &readbuf[..len];
@@ -148,7 +148,7 @@ impl DBusConnection {
                 }
 
                 DBusSatisfy::Write => {
-                    writer.satisfy(satisfy, res, queue)?;
+                    writer.satisfy_write(res, queue)?;
                     Ok(None)
                 }
 

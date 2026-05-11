@@ -1,4 +1,4 @@
-use crate::{DBusError, DBusSatisfy, DBusWants, sansio::DBusQueue};
+use crate::{DBusError, DBusWants, sansio::DBusQueue};
 
 pub(crate) struct DBusWriter {
     fd: i32,
@@ -37,18 +37,11 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn satisfy(
+    pub(crate) fn satisfy_write(
         &mut self,
-        satisfy: DBusSatisfy,
         res: i32,
         queue: &mut DBusQueue,
     ) -> Result<(), DBusError> {
-        if satisfy != DBusSatisfy::Write {
-            return Err(DBusError::InternalError(format!(
-                "unexpected satisfy {satisfy:?} (expected Write)"
-            )));
-        }
-
         match &mut self.state {
             State::Writing { bytes_written } => {
                 let buf = queue.front().ok_or_else(|| {
