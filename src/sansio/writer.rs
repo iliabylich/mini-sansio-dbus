@@ -63,10 +63,7 @@ impl DBusWriter {
                 *bytes_written += res as usize;
                 self.seq += 1;
 
-                eprintln!("Moment of truth: {} vs {}", *bytes_written, buf.len());
-
                 if *bytes_written == buf.len() {
-                    eprintln!("Starting a new message!!!!!");
                     *bytes_written = 0;
                     queue.pop_front();
                 }
