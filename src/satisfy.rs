@@ -1,4 +1,4 @@
-/// Represents completion of a previously request operation (`Wants`)
+/// Represents completion of a previously request operation (`DBusWants`)
 ///
 /// Usually the flow should be:
 ///
@@ -11,7 +11,7 @@
 /// ```
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 
-pub enum Satisfy {
+pub enum DBusSatisfy {
     /// A `socket()` operation
     Socket,
     /// A `connect()` operation

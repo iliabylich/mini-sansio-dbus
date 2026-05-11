@@ -1,135 +1,121 @@
-use crate::{DBusError, Satisfy, Wants, types::Header};
+use crate::{DBusError, DBusSatisfy, DBusWants, types::Header};
 
 const HEADER_LEN: usize = size_of::<Header>();
 
 pub(crate) struct DBusReader {
     fd: i32,
-    bytes_read: usize,
-    message_len: usize,
     state: State,
+    seq: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum State {
-    ReadyTo(Action),
-    WaitingFor(Action),
+    ReadHeader {
+        bytes_read: usize,
+    },
+    ReadBody {
+        message_len: usize,
+        bytes_read: usize,
+    },
     Dead,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Action {
-    ReadHeader,
-    ReadBody,
-}
-
 impl DBusReader {
-    pub(crate) const fn new(fd: i32) -> Self {
+    pub(crate) const fn new(fd: i32, seq: u64) -> Self {
         Self {
             fd,
-            bytes_read: 0,
-            message_len: 0,
-            state: State::ReadyTo(Action::ReadHeader),
+            state: State::ReadHeader { bytes_read: 0 },
+            seq,
         }
     }
 
-    pub(crate) fn wants(&mut self, buf: &mut Vec<u8>) -> Option<Wants> {
-        let State::ReadyTo(action) = self.state else {
-            return None;
-        };
-
-        let wants = match action {
-            Action::ReadHeader => {
+    pub(crate) fn wants(&self, buf: &mut Vec<u8>) -> Option<DBusWants> {
+        match self.state {
+            State::ReadHeader { bytes_read } => {
                 buf.resize(HEADER_LEN, 0);
-                Wants::Read {
+                let remainder = &mut buf[bytes_read..HEADER_LEN];
+                Some(DBusWants::Read {
                     fd: self.fd,
-                    buf: buf.as_mut_ptr(),
-                    len: HEADER_LEN,
-                }
+                    buf: remainder.as_mut_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
             }
 
-            Action::ReadBody => {
-                buf.resize(self.message_len, 0);
-                let buf = &mut buf[self.bytes_read..self.message_len];
-                Wants::Read {
+            State::ReadBody {
+                bytes_read,
+                message_len,
+            } => {
+                buf.resize(message_len, 0);
+                let remainder = &mut buf[bytes_read..message_len];
+                Some(DBusWants::Read {
                     fd: self.fd,
-                    buf: buf.as_mut_ptr(),
-                    len: buf.len(),
-                }
+                    buf: remainder.as_mut_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
             }
-        };
-        self.state = State::WaitingFor(action);
-        Some(wants)
+            State::Dead => None,
+        }
     }
 
     pub(crate) fn satisfy(
         &mut self,
-        satisfy: Satisfy,
+        satisfy: DBusSatisfy,
         res: i32,
         buf: &[u8],
     ) -> Result<Option<usize>, DBusError> {
-        let action = match self.state {
-            State::WaitingFor(action) => action,
-            State::Dead => return Ok(None),
-            state @ State::ReadyTo(_) => {
-                return Err(DBusError::InternalError(format!(
-                    "malformed state: {state:?} vs {satisfy:?}"
-                )));
-            }
-        };
-
-        match (action, satisfy) {
-            (Action::ReadHeader, Satisfy::Read) => {
-                if res == 0 {
-                    return Ok(None);
-                }
-                if res <= 0 {
+        match (&mut self.state, satisfy) {
+            (State::ReadHeader { bytes_read }, DBusSatisfy::Read) => {
+                if res < 0 {
                     return Err(DBusError::ReadError(format!("ReadHeader failed: {res}")));
                 }
-                let bytes_read = res as usize;
-                if bytes_read != HEADER_LEN {
-                    return Err(DBusError::ReadError(format!(
-                        "ReadHeader: got {bytes_read} bytes instead of {HEADER_LEN}"
-                    )));
+                *bytes_read += res as usize;
+                self.seq += 1;
+
+                if *bytes_read == HEADER_LEN {
+                    let header = Header::from_bytes(buf)?;
+
+                    let header_fields_len = (header.header_fields_len as usize).next_multiple_of(8);
+                    let message_len = HEADER_LEN
+                        .checked_add(header_fields_len)
+                        .and_then(|len| len.checked_add(header.body_len as usize))
+                        .ok_or(DBusError::MessageLengthOverflow)?;
+
+                    self.state = State::ReadBody {
+                        message_len,
+                        bytes_read: HEADER_LEN,
+                    };
                 }
-                self.bytes_read += bytes_read;
-
-                let header = Header::from_bytes(buf)?;
-
-                let header_fields_len = (header.header_fields_len as usize).next_multiple_of(8);
-                let message_len = HEADER_LEN
-                    .checked_add(header_fields_len)
-                    .and_then(|len| len.checked_add(header.body_len as usize))
-                    .ok_or(DBusError::MessageLengthOverflow)?;
-
-                self.message_len = message_len;
-                self.state = State::ReadyTo(Action::ReadBody);
 
                 Ok(None)
             }
 
-            (Action::ReadBody, Satisfy::Read) => {
-                if res <= 0 {
+            (
+                State::ReadBody {
+                    message_len,
+                    bytes_read,
+                },
+                DBusSatisfy::Read,
+            ) => {
+                if res < 0 {
                     return Err(DBusError::ReadError(format!("ReadBody failed: {res}")));
                 }
-                let bytes_read = res as usize;
-                self.bytes_read += bytes_read;
+                *bytes_read += res as usize;
+                self.seq += 1;
 
-                if self.bytes_read == self.message_len {
-                    let message_len = self.message_len;
+                if *bytes_read == *message_len {
+                    let len = *message_len;
+                    self.state = State::ReadHeader { bytes_read: 0 };
 
-                    self.bytes_read = 0;
-                    self.message_len = 0;
-                    self.state = State::ReadyTo(Action::ReadHeader);
-
-                    Ok(Some(message_len))
+                    Ok(Some(len))
                 } else {
-                    self.state = State::ReadyTo(Action::ReadBody);
                     Ok(None)
                 }
             }
 
-            (_, _) => Err(DBusError::InternalError(format!(
-                "malformed state: {action:?} vs {satisfy:?}"
+            (state, _) => Err(DBusError::InternalError(format!(
+                "malformed state: {state:?} vs {satisfy:?}"
             ))),
         }
     }

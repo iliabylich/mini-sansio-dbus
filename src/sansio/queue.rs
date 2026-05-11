@@ -45,6 +45,10 @@ impl DBusQueue {
     pub(crate) fn pop_front(&mut self) -> Option<Vec<u8>> {
         self.q.pop_front()
     }
+
+    pub(crate) fn front(&self) -> Option<&[u8]> {
+        self.q.front().map(|v| &**v)
+    }
 }
 
 impl Default for DBusQueue {

@@ -1,4 +1,4 @@
-use crate::{DBusError, IncomingMessage, Satisfy, Wants};
+use crate::{DBusError, DBusSatisfy, DBusWants, IncomingMessage};
 use connector::DBusConnector;
 use libc::{AF_UNIX, sockaddr_un};
 use reader::DBusReader;
@@ -75,27 +75,31 @@ impl DBusConnection {
     /// Returns what connection wants at the moment
     ///
     /// Returned value must be parsed and converted to a syscall of some sort
-    pub fn wants(&mut self, queue: &mut DBusQueue, readbuf: &mut Vec<u8>) -> Option<Wants> {
+    pub fn wants(&mut self, queue: &mut DBusQueue, readbuf: &mut Vec<u8>) -> Option<DBusWants> {
         match &mut self.state {
             State::Connecting(connector) => connector.wants(),
             State::Ready { reader, writer } => match (reader.wants(readbuf), writer.wants(queue)) {
                 (
-                    Some(Wants::Read {
+                    Some(DBusWants::Read {
                         fd,
                         buf: readbuf,
                         len: readlen,
+                        seq: readseq,
                     }),
-                    Some(Wants::Write {
+                    Some(DBusWants::Write {
                         buf: writebuf,
                         len: writelen,
+                        seq: writeseq,
                         ..
                     }),
-                ) => Some(Wants::ReadWrite {
+                ) => Some(DBusWants::ReadWrite {
                     fd,
                     readbuf,
                     readlen,
+                    readseq,
                     writebuf,
                     writelen,
+                    writeseq,
                 }),
 
                 (read, None) => read,
@@ -114,26 +118,26 @@ impl DBusConnection {
     /// Fails is operation is not the one that was last returned from `wants`
     pub fn satisfy<'a>(
         &mut self,
-        satisfy: Satisfy,
+        satisfy: DBusSatisfy,
         res: i32,
         readbuf: &'a [u8],
         queue: &mut DBusQueue,
     ) -> Result<Option<IncomingMessage<'a>>, DBusError> {
         match &mut self.state {
             State::Connecting(connector) => {
-                let Some(fd) = connector.satisfy(satisfy, res)? else {
+                let Some((fd, seq)) = connector.satisfy(satisfy, res)? else {
                     return Ok(None);
                 };
 
                 self.state = State::Ready {
-                    reader: DBusReader::new(fd),
-                    writer: DBusWriter::new(fd, queue),
+                    reader: DBusReader::new(fd, seq),
+                    writer: DBusWriter::new(fd, seq),
                 };
                 Ok(None)
             }
 
             State::Ready { reader, writer } => match satisfy {
-                Satisfy::Read => {
+                DBusSatisfy::Read => {
                     let Some(len) = reader.satisfy(satisfy, res, readbuf)? else {
                         return Ok(None);
                     };
@@ -143,7 +147,7 @@ impl DBusConnection {
                     Ok(Some(message))
                 }
 
-                Satisfy::Write => {
+                DBusSatisfy::Write => {
                     writer.satisfy(satisfy, res, queue)?;
                     Ok(None)
                 }

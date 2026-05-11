@@ -13,7 +13,6 @@
 #![expect(clippy::redundant_pub_crate)]
 #![expect(clippy::cast_possible_truncation)]
 #![expect(clippy::arithmetic_side_effects)]
-#![expect(clippy::too_many_lines)]
 #![expect(clippy::cast_possible_wrap)]
 #![expect(clippy::cast_sign_loss)]
 #![doc = include_str!("../README.md")]
@@ -40,6 +39,6 @@ pub use error::DBusError;
 pub use outgoing::{OutgoingCompleteType, OutgoingMessage, OutgoingSignature, OutgoingValue};
 pub use requests::{IncompleteMethodCall, MethodCall, Subscription};
 pub use sansio::{DBusConnection, DBusQueue};
-pub use satisfy::Satisfy;
+pub use satisfy::DBusSatisfy;
 pub use types::MessageType;
-pub use wants::Wants;
+pub use wants::DBusWants;

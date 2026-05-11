@@ -1,226 +1,241 @@
-use crate::{DBusError, Satisfy, Wants};
+use crate::{DBusError, DBusSatisfy, DBusWants};
 use libc::{AF_UNIX, SOCK_STREAM, sockaddr, sockaddr_un};
 
 #[derive(Debug, Clone, Copy)]
 enum State {
-    ReadyTo(Action),
-    WaitingFor(Action),
-    Done,
-    Dead,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Action {
     Socket,
     Connect,
     WriteZero,
-    WriteAuthExternal,
-    ReadData,
-    WriteData,
-    ReadGUID,
-    WriteBegin,
+    WriteAuthExternal { bytes_written: usize },
+    ReadData { bytes_read: usize },
+    WriteData { bytes_written: usize },
+    ReadGUID { bytes_read: usize },
+    WriteBegin { bytes_written: usize },
+
+    Stopped,
 }
+
+const ZERO: &[u8] = b"\0";
+const AUTH_EXTERNAL: &[u8] = b"AUTH EXTERNAL\r\n";
+const DATA: &[u8] = b"DATA\r\n";
+const BEGIN: &[u8] = b"BEGIN\r\n";
+const GUID_LENGTH: usize = 37;
 
 pub(crate) struct DBusConnector {
     fd: i32,
     state: State,
     addr: sockaddr_un,
     buf: [u8; 100],
+    seq: u64,
 }
 
 impl DBusConnector {
     pub(crate) const fn new(addr: sockaddr_un) -> Self {
         Self {
             fd: -1,
-            state: State::ReadyTo(Action::Socket),
+            state: State::Socket,
             addr,
             buf: [0; _],
+            seq: 0,
         }
     }
 
     pub(crate) const fn dummy() -> Self {
         Self {
             fd: -1,
-            state: State::Dead,
+            state: State::Stopped,
             addr: sockaddr_un {
                 sun_family: 0,
                 sun_path: [0; _],
             },
             buf: [0; _],
+            seq: 0,
         }
     }
 
-    pub(crate) const fn wants(&mut self) -> Option<Wants> {
-        let State::ReadyTo(action) = self.state else {
-            return None;
-        };
-
-        let wants = match action {
-            Action::Socket => Wants::Socket {
+    pub(crate) fn wants(&mut self) -> Option<DBusWants> {
+        match self.state {
+            State::Socket => Some(DBusWants::Socket {
                 domain: AF_UNIX,
                 r#type: SOCK_STREAM,
-            },
+                seq: self.seq,
+            }),
 
-            Action::Connect => Wants::Connect {
+            State::Connect => Some(DBusWants::Connect {
                 fd: self.fd,
                 addr: (&raw const self.addr).cast::<sockaddr>(),
                 addrlen: size_of::<sockaddr_un>() as u32,
-            },
+                seq: self.seq,
+            }),
 
-            Action::WriteZero => {
-                let buf = b"\0";
-                Wants::Write {
-                    fd: self.fd,
-                    buf: buf.as_ptr(),
-                    len: buf.len(),
-                }
-            }
-
-            Action::WriteAuthExternal => {
-                let buf = b"AUTH EXTERNAL\r\n";
-                Wants::Write {
-                    fd: self.fd,
-                    buf: buf.as_ptr(),
-                    len: buf.len(),
-                }
-            }
-
-            Action::ReadData | Action::ReadGUID => Wants::Read {
+            State::WriteZero => Some(DBusWants::Write {
                 fd: self.fd,
-                buf: self.buf.as_mut_ptr(),
-                len: self.buf.len(),
-            },
+                buf: ZERO.as_ptr(),
+                len: ZERO.len(),
+                seq: self.seq,
+            }),
 
-            Action::WriteData => {
-                let buf = b"DATA\r\n";
-                Wants::Write {
+            State::WriteAuthExternal { bytes_written } => {
+                let remainder = &AUTH_EXTERNAL[bytes_written..];
+                Some(DBusWants::Write {
                     fd: self.fd,
-                    buf: buf.as_ptr(),
-                    len: buf.len(),
-                }
+                    buf: remainder.as_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
             }
 
-            Action::WriteBegin => {
-                let buf = b"BEGIN\r\n";
-                Wants::Write {
+            State::ReadData { bytes_read } => {
+                let remainder = &mut self.buf[bytes_read..DATA.len()];
+                Some(DBusWants::Read {
                     fd: self.fd,
-                    buf: buf.as_ptr(),
-                    len: buf.len(),
-                }
+                    buf: remainder.as_mut_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
             }
-        };
-        self.state = State::WaitingFor(action);
-        Some(wants)
+
+            State::WriteData { bytes_written } => {
+                let remainder = &DATA[bytes_written..];
+                Some(DBusWants::Write {
+                    fd: self.fd,
+                    buf: remainder.as_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
+            }
+
+            State::ReadGUID { bytes_read } => {
+                let remainder = &mut self.buf[bytes_read..GUID_LENGTH];
+                Some(DBusWants::Read {
+                    fd: self.fd,
+                    buf: remainder.as_mut_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
+            }
+
+            State::WriteBegin { bytes_written } => {
+                let remainder = &BEGIN[bytes_written..];
+                Some(DBusWants::Write {
+                    fd: self.fd,
+                    buf: remainder.as_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
+                })
+            }
+
+            State::Stopped => None,
+        }
     }
 
-    pub(crate) fn satisfy(&mut self, satisfy: Satisfy, res: i32) -> Result<Option<i32>, DBusError> {
-        let action = match self.state {
-            State::WaitingFor(action) => action,
-            State::Dead => return Ok(None),
-            state => {
-                return Err(DBusError::InternalError(format!(
-                    "malformed state: {state:?} vs {satisfy:?}"
-                )));
-            }
-        };
-
-        match (action, satisfy) {
-            (Action::Socket, Satisfy::Socket) => {
+    pub(crate) fn satisfy(
+        &mut self,
+        satisfy: DBusSatisfy,
+        res: i32,
+    ) -> Result<Option<(i32, u64)>, DBusError> {
+        match (&mut self.state, satisfy) {
+            (State::Socket, DBusSatisfy::Socket) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!("Socket failed: {res}")));
                 }
                 self.fd = res;
-                self.state = State::ReadyTo(Action::Connect);
+                self.state = State::Connect;
+                self.seq += 1;
                 Ok(None)
             }
 
-            (Action::Connect, Satisfy::Connect) => {
+            (State::Connect, DBusSatisfy::Connect) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!("Connect failed: {res}")));
                 }
-                self.state = State::ReadyTo(Action::WriteZero);
+                self.state = State::WriteZero;
+                self.seq += 1;
                 Ok(None)
             }
 
-            (Action::WriteZero, Satisfy::Write) => {
+            (State::WriteZero, DBusSatisfy::Write) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!("Write failed: {res}")));
                 }
-                let bytes_written = res as usize;
-                if bytes_written != b"\0".len() {
-                    return Err(DBusError::ConnectError(format!(
-                        "Write failed, got {bytes_written} bytes written"
-                    )));
+                if res == 1 {
+                    self.state = State::WriteAuthExternal { bytes_written: 0 };
+                    self.seq += 1;
                 }
-                self.state = State::ReadyTo(Action::WriteAuthExternal);
                 Ok(None)
             }
 
-            (Action::WriteAuthExternal, Satisfy::Write) => {
+            (State::WriteAuthExternal { bytes_written }, DBusSatisfy::Write) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!(
                         "WriteAuthExternal failed: {res}"
                     )));
                 }
-                let bytes_written = res as usize;
-                if bytes_written != b"AUTH EXTERNAL\r\n".len() {
-                    return Err(DBusError::ConnectError(format!(
-                        "Write failed, got {bytes_written} bytes written"
-                    )));
+                *bytes_written += res as usize;
+                self.seq += 1;
+
+                let remainder = &AUTH_EXTERNAL[*bytes_written..];
+                if remainder.is_empty() {
+                    self.state = State::ReadData { bytes_read: 0 };
                 }
-                self.state = State::ReadyTo(Action::ReadData);
                 Ok(None)
             }
 
-            (Action::ReadData, Satisfy::Read) => {
+            (State::ReadData { bytes_read }, DBusSatisfy::Read) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!("ReadData failed: {res}")));
                 }
-                let bytes_read = res as usize;
-                if &self.buf[..bytes_read] != b"DATA\r\n" {
-                    return Err(DBusError::ConnectError(format!(
-                        "ReadData failed: expected to receive DATA, got {:?}",
-                        &self.buf[..bytes_read]
-                    )));
+                *bytes_read += res as usize;
+                self.seq += 1;
+
+                let remainder = &self.buf[*bytes_read..DATA.len()];
+                if remainder.is_empty() {
+                    self.state = State::WriteData { bytes_written: 0 };
                 }
-                self.state = State::ReadyTo(Action::WriteData);
                 Ok(None)
             }
 
-            (Action::WriteData, Satisfy::Write) => {
+            (State::WriteData { bytes_written }, DBusSatisfy::Write) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!("WriteData failed: {res}")));
                 }
-                let bytes_written = res as usize;
-                if bytes_written != b"DATA\r\n".len() {
-                    return Err(DBusError::ConnectError(format!(
-                        "Write failed, got {bytes_written} bytes written"
-                    )));
+                *bytes_written += res as usize;
+                self.seq += 1;
+
+                let remainder = &DATA[*bytes_written..];
+                if remainder.is_empty() {
+                    self.state = State::ReadGUID { bytes_read: 0 };
                 }
-                self.state = State::ReadyTo(Action::ReadGUID);
                 Ok(None)
             }
 
-            (Action::ReadGUID, Satisfy::Read) => {
-                if res <= 0 {
+            (State::ReadGUID { bytes_read }, DBusSatisfy::Read) => {
+                if res < 0 {
                     return Err(DBusError::ConnectError(format!("ReadGUID failed: {res}")));
                 }
-                self.state = State::ReadyTo(Action::WriteBegin);
+                *bytes_read += res as usize;
+                self.seq += 1;
+
+                if *bytes_read == GUID_LENGTH {
+                    self.state = State::WriteBegin { bytes_written: 0 };
+                }
                 Ok(None)
             }
 
-            (Action::WriteBegin, Satisfy::Write) => {
+            (State::WriteBegin { bytes_written }, DBusSatisfy::Write) => {
                 if res < 0 {
                     return Err(DBusError::ConnectError(format!("WriteBegin failed: {res}")));
                 }
-                let bytes_written = res as usize;
-                if bytes_written != b"BEGIN\r\n".len() {
-                    return Err(DBusError::ConnectError(format!(
-                        "Write failed, got {bytes_written} bytes written"
-                    )));
+                *bytes_written += res as usize;
+                self.seq += 1;
+
+                let remainder = &BEGIN[*bytes_written..];
+                if remainder.is_empty() {
+                    self.state = State::Stopped;
+                    Ok(Some((self.fd, self.seq)))
+                } else {
+                    Ok(None)
                 }
-                self.state = State::Done;
-                Ok(Some(self.fd))
             }
 
             (state, satisfy) => Err(DBusError::InternalError(format!(
@@ -230,6 +245,6 @@ impl DBusConnector {
     }
 
     pub(crate) const fn stop(&mut self) {
-        self.state = State::Dead;
+        self.state = State::Stopped;
     }
 }

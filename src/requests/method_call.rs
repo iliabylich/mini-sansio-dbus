@@ -29,7 +29,7 @@ where
     Data: Clone,
 {
     /// Fills `self` with data, makes it send-able
-    pub fn with_data(self, data: Data) -> MethodCall<In, Out, Data> {
+    pub const fn with_data(self, data: Data) -> MethodCall<In, Out, Data> {
         MethodCall {
             send: self.send,
             try_process: self.try_process,

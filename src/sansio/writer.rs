@@ -1,88 +1,80 @@
-use crate::{DBusError, Satisfy, Wants, sansio::DBusQueue};
+use crate::{DBusError, DBusSatisfy, DBusWants, sansio::DBusQueue};
 
 pub(crate) struct DBusWriter {
     fd: i32,
-    current: Option<Vec<u8>>,
     state: State,
+    seq: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum State {
-    ReadyToWrite,
-    WaitingForWrite,
+    Writing { bytes_written: usize },
     Dead,
 }
 
 impl DBusWriter {
-    pub(crate) fn new(fd: i32, queue: &mut DBusQueue) -> Self {
-        let current = queue.pop_front();
-
+    pub(crate) const fn new(fd: i32, seq: u64) -> Self {
         Self {
             fd,
-            current,
-            state: State::ReadyToWrite,
+            state: State::Writing { bytes_written: 0 },
+            seq,
         }
     }
 
-    pub(crate) fn wants(&mut self, queue: &mut DBusQueue) -> Option<Wants> {
+    pub(crate) fn wants(&self, queue: &DBusQueue) -> Option<DBusWants> {
         match self.state {
-            State::ReadyToWrite => {
-                if self.current.is_none() {
-                    self.current = queue.pop_front();
-                }
-
-                let buf = self.current.as_mut()?;
-
-                self.state = State::WaitingForWrite;
-                Some(Wants::Write {
+            State::Writing { bytes_written } => {
+                let buf = queue.front()?;
+                let remainder = &buf[bytes_written..];
+                Some(DBusWants::Write {
                     fd: self.fd,
-                    buf: buf.as_ptr(),
-                    len: buf.len(),
+                    buf: remainder.as_ptr(),
+                    len: remainder.len(),
+                    seq: self.seq,
                 })
             }
-
-            State::WaitingForWrite | State::Dead => None,
+            State::Dead => None,
         }
     }
 
     pub(crate) fn satisfy(
         &mut self,
-        satisfy: Satisfy,
+        satisfy: DBusSatisfy,
         res: i32,
         queue: &mut DBusQueue,
     ) -> Result<(), DBusError> {
-        match (self.state, satisfy) {
-            (State::Dead, _) => Ok(()),
+        if satisfy != DBusSatisfy::Write {
+            return Err(DBusError::InternalError(format!(
+                "unexpected satisfy {satisfy:?} (expected Write)"
+            )));
+        }
 
-            (State::WaitingForWrite, Satisfy::Write) => {
+        match &mut self.state {
+            State::Writing { bytes_written } => {
+                let buf = queue.front().ok_or_else(|| {
+                    DBusError::InternalError(
+                        "empty Queue, can't process Satisfy::Write".to_string(),
+                    )
+                })?;
+
                 if res < 0 {
                     return Err(DBusError::WriteError(format!("Write failed: {res}")));
                 }
-                let Some(message) = self.current.take() else {
-                    return Err(DBusError::InternalError(
-                        "malformed state: received Write, but there's no current message"
-                            .to_string(),
-                    ));
-                };
-                let bytes_written = res as usize;
-                if bytes_written != message.len() {
-                    return Err(DBusError::WriteError(format!(
-                        "written is wrong: {bytes_written} vs {}",
-                        message.len()
-                    )));
-                }
+                *bytes_written += res as usize;
+                self.seq += 1;
 
-                if let Some(next) = queue.pop_front() {
-                    self.current = Some(next);
+                eprintln!("Moment of truth: {} vs {}", *bytes_written, buf.len());
+
+                if *bytes_written == buf.len() {
+                    eprintln!("Starting a new message!!!!!");
+                    *bytes_written = 0;
+                    queue.pop_front();
                 }
-                self.state = State::ReadyToWrite;
-                Ok(())
             }
-
-            (state, satisfy) => Err(DBusError::InternalError(format!(
-                "malformed state: {state:?} vs {satisfy:?}"
-            ))),
+            State::Dead => {}
         }
+
+        Ok(())
     }
 
     pub(crate) const fn stop(&mut self) {

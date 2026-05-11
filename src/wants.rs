@@ -10,13 +10,15 @@
 /// conn.satisfy(Satisfy::<OneThatMatchesWants>);
 /// ```
 #[derive(Debug)]
-pub enum Wants {
+pub enum DBusWants {
     /// A `socket()` opertion
     Socket {
         /// `domain` argument of the `socket()` call
         domain: i32,
         /// `type` argument of the `socket()` call
         r#type: i32,
+        /// sequence number of a request
+        seq: u64,
     },
     /// A `connect()` opertion
     Connect {
@@ -26,6 +28,8 @@ pub enum Wants {
         addr: *const libc::sockaddr,
         /// `addrlenm` argument of the `connect()` call
         addrlen: u32,
+        /// sequence number of a request
+        seq: u64,
     },
     /// A `read()` opertion
     Read {
@@ -35,6 +39,8 @@ pub enum Wants {
         buf: *mut u8,
         /// `len` argument of the `read()` call
         len: usize,
+        /// sequence number of a request
+        seq: u64,
     },
     /// A `write()` opertion
     Write {
@@ -44,18 +50,24 @@ pub enum Wants {
         buf: *const u8,
         /// `len` argument of the `write()` call
         len: usize,
+        /// sequence number of a request
+        seq: u64,
     },
     /// A combination of `read()` +  `write()` opertions
     ReadWrite {
-        /// `fd` argument of `read()` / `write()` calls
+        /// `fd` argument of `read()` / `write()` call
         fd: i32,
-        /// `buf` argument of `read()` calls
+        /// `buf` argument of the `read()` call
         readbuf: *mut u8,
-        /// `len` argument of `read()` calls
+        /// `len` argument of the `read()` call
         readlen: usize,
-        /// `buf` argument of `write()` calls
+        /// sequence number of the `read()` call
+        readseq: u64,
+        /// `buf` argument of the `write()` call
         writebuf: *const u8,
-        /// `len` argument of `write()` calls
+        /// `len` argument of the `write()` call
         writelen: usize,
+        /// sequence number of the `write()` call
+        writeseq: u64,
     },
 }
