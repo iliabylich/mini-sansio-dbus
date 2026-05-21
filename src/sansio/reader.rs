@@ -3,7 +3,6 @@ use crate::{DBusError, DBusWants, types::Header};
 const HEADER_LEN: usize = size_of::<Header>();
 
 pub(crate) struct DBusReader {
-    fd: i32,
     state: State,
     seq: u64,
 }
@@ -21,23 +20,23 @@ enum State {
 }
 
 impl DBusReader {
-    pub(crate) const fn new(fd: i32, seq: u64) -> Self {
+    pub(crate) const fn new(seq: u64) -> Self {
         Self {
-            fd,
             state: State::ReadHeader { bytes_read: 0 },
             seq,
         }
     }
 
-    pub(crate) fn wants(&self, buf: &mut Vec<u8>) -> Option<DBusWants> {
+    pub(crate) fn wants<'readbuf>(
+        &self,
+        buf: &'readbuf mut Vec<u8>,
+    ) -> Option<DBusWants<'readbuf, 'static>> {
         match self.state {
             State::ReadHeader { bytes_read } => {
                 buf.resize(HEADER_LEN, 0);
                 let remainder = &mut buf[bytes_read..HEADER_LEN];
                 Some(DBusWants::Read {
-                    fd: self.fd,
-                    buf: remainder.as_mut_ptr(),
-                    len: remainder.len(),
+                    buf: remainder,
                     seq: self.seq,
                 })
             }
@@ -49,9 +48,7 @@ impl DBusReader {
                 buf.resize(message_len, 0);
                 let remainder = &mut buf[bytes_read..message_len];
                 Some(DBusWants::Read {
-                    fd: self.fd,
-                    buf: remainder.as_mut_ptr(),
-                    len: remainder.len(),
+                    buf: remainder,
                     seq: self.seq,
                 })
             }
@@ -61,15 +58,12 @@ impl DBusReader {
 
     pub(crate) fn satisfy_read(
         &mut self,
-        res: i32,
+        len: usize,
         buf: &[u8],
     ) -> Result<Option<usize>, DBusError> {
         match &mut self.state {
             State::ReadHeader { bytes_read } => {
-                if res < 0 {
-                    return Err(DBusError::ReadError(format!("ReadHeader failed: {res}")));
-                }
-                *bytes_read += res as usize;
+                *bytes_read += len;
                 self.seq += 1;
 
                 if *bytes_read == HEADER_LEN {
@@ -94,10 +88,7 @@ impl DBusReader {
                 message_len,
                 bytes_read,
             } => {
-                if res < 0 {
-                    return Err(DBusError::ReadError(format!("ReadBody failed: {res}")));
-                }
-                *bytes_read += res as usize;
+                *bytes_read += len;
                 self.seq += 1;
 
                 if *bytes_read == *message_len {

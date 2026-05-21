@@ -1,7 +1,7 @@
-use crate::{DBusError, DBusSatisfy, DBusWants, IncomingMessage};
+use crate::{DBusError, DBusWants, IncomingMessage};
 use connector::DBusConnector;
-use libc::{AF_UNIX, sockaddr_un};
 use reader::DBusReader;
+use rustix::net::SocketAddrUnix;
 use writer::DBusWriter;
 
 pub use queue::DBusQueue;
@@ -26,7 +26,7 @@ enum State {
 }
 
 impl DBusConnection {
-    const fn new(addr: sockaddr_un) -> Self {
+    const fn new(addr: SocketAddrUnix) -> Self {
         Self {
             state: State::Connecting(DBusConnector::new(addr)),
         }
@@ -35,7 +35,7 @@ impl DBusConnection {
     /// Constructs a dummy connection that doesn't "want" anything from you
     ///
     /// Can be used as a fallback if things go wrong.
-    pub const fn dummy() -> Self {
+    pub fn dummy() -> Self {
         Self {
             state: State::Connecting(DBusConnector::dummy()),
         }
@@ -45,7 +45,7 @@ impl DBusConnection {
     ///
     /// # Errors
     ///
-    /// Fails if `$DBUS_SESSION_BUS_ADDRESS` env variable isn't set
+    /// Fails if `$DBUS_SESSION_BUS_ADDRESS` env variable isn't set or contains NULL.
     pub fn new_session() -> Result<Self, DBusError> {
         let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")
             .map_err(|_| DBusError::NoSessionBusAddress)?;
@@ -53,13 +53,17 @@ impl DBusConnection {
             .split_once('=')
             .ok_or(DBusError::MalformedSessionBusAddress)?;
 
-        let addr = new_unix_socket(path.as_bytes());
+        let addr = SocketAddrUnix::new(path.as_bytes()).map_err(|_| DBusError::DBusPathWithNull)?;
 
         Ok(Self::new(addr))
     }
 
     /// Constructs a new system connection
-    pub fn new_system() -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Fails if session UNIX address contains NULL.
+    pub fn new_system() -> Result<Self, DBusError> {
         fn socket_path() -> String {
             std::env::var("DBUS_SYSTEM_BUS_ADDRESS")
                 .ok()
@@ -67,38 +71,37 @@ impl DBusConnection {
                 .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"))
         }
 
-        let addr = new_unix_socket(socket_path().as_bytes());
+        let addr = SocketAddrUnix::new(socket_path().as_bytes())
+            .map_err(|_| DBusError::DBusPathWithNull)?;
 
-        Self::new(addr)
+        Ok(Self::new(addr))
     }
 
     /// Returns what connection wants at the moment
     ///
     /// Returned value must be parsed and converted to a syscall of some sort
-    pub fn wants(&mut self, queue: &mut DBusQueue, readbuf: &mut Vec<u8>) -> Option<DBusWants> {
+    pub fn wants<'readbuf, 'writebuf>(
+        &mut self,
+        queue: &'writebuf mut DBusQueue,
+        readbuf: &'readbuf mut Vec<u8>,
+    ) -> Option<DBusWants<'readbuf, 'writebuf>> {
         match &mut self.state {
-            State::Connecting(connector) => connector.wants(),
+            State::Connecting(connector) => connector.wants(readbuf),
             State::Ready { reader, writer } => match (reader.wants(readbuf), writer.wants(queue)) {
                 (
                     Some(DBusWants::Read {
-                        fd,
                         buf: readbuf,
-                        len: readlen,
                         seq: readseq,
                     }),
                     Some(DBusWants::Write {
                         buf: writebuf,
-                        len: writelen,
                         seq: writeseq,
                         ..
                     }),
                 ) => Some(DBusWants::ReadWrite {
-                    fd,
                     readbuf,
-                    readlen,
                     readseq,
                     writebuf,
-                    writelen,
                     writeseq,
                 }),
 
@@ -111,51 +114,86 @@ impl DBusConnection {
         }
     }
 
-    /// Notifies about completion of a previously requested operation
+    /// Notifies about completion of a `socket()` operation
     ///
     /// # Errors
     ///
     /// Fails is operation is not the one that was last returned from `wants`
-    pub fn satisfy<'a>(
+    pub fn satisfy_socket(&mut self) -> Result<(), DBusError> {
+        let State::Connecting(connector) = &mut self.state else {
+            return Err(DBusError::InternalError(
+                "DBus in r/w mode received unexpected satisfy: Socket".to_string(),
+            ));
+        };
+
+        connector.satisfy_socket()?;
+        Ok(())
+    }
+
+    /// Notifies about completion of a `connect()` operation
+    ///
+    /// # Errors
+    ///
+    /// Fails is operation is not the one that was last returned from `wants`
+    pub fn satisfy_connect(&mut self) -> Result<(), DBusError> {
+        let State::Connecting(connector) = &mut self.state else {
+            return Err(DBusError::InternalError(
+                "DBus in r/w mode received unexpected satisfy: Connect".to_string(),
+            ));
+        };
+
+        connector.satisfy_connect()?;
+        Ok(())
+    }
+
+    /// Notifies about completion of a `read()` operation
+    ///
+    /// # Errors
+    ///
+    /// Fails is operation is not the one that was last returned from `wants`
+    pub fn satisfy_read<'readbuf>(
         &mut self,
-        satisfy: DBusSatisfy,
-        res: i32,
-        readbuf: &'a [u8],
-        queue: &mut DBusQueue,
-    ) -> Result<Option<IncomingMessage<'a>>, DBusError> {
+        len: usize,
+        readbuf: &'readbuf [u8],
+    ) -> Result<Option<IncomingMessage<'readbuf>>, DBusError> {
         match &mut self.state {
             State::Connecting(connector) => {
-                let Some((fd, seq)) = connector.satisfy(satisfy, res)? else {
+                connector.satisfy_read(len, readbuf)?;
+                Ok(None)
+            }
+            State::Ready { reader, .. } => {
+                let Some(len) = reader.satisfy_read(len, readbuf)? else {
                     return Ok(None);
                 };
 
-                self.state = State::Ready {
-                    reader: DBusReader::new(fd, seq),
-                    writer: DBusWriter::new(fd, seq),
-                };
-                Ok(None)
+                let buf = &readbuf[..len];
+
+                let message = IncomingMessage::new(buf)?;
+                Ok(Some(message))
             }
+        }
+    }
 
-            State::Ready { reader, writer } => match satisfy {
-                DBusSatisfy::Read => {
-                    let Some(len) = reader.satisfy_read(res, readbuf)? else {
-                        return Ok(None);
+    /// Notifies about completion of a `write()` operation
+    ///
+    /// # Errors
+    ///
+    /// Fails is operation is not the one that was last returned from `wants`
+    pub fn satisfy_write(&mut self, len: usize, queue: &mut DBusQueue) -> Result<(), DBusError> {
+        match &mut self.state {
+            State::Connecting(connector) => {
+                if let Some(seq) = connector.satisfy_write(len)? {
+                    self.state = State::Ready {
+                        reader: DBusReader::new(seq),
+                        writer: DBusWriter::new(seq),
                     };
-                    let buf = &readbuf[..len];
-
-                    let message = IncomingMessage::new(buf)?;
-                    Ok(Some(message))
                 }
-
-                DBusSatisfy::Write => {
-                    writer.satisfy_write(res, queue)?;
-                    Ok(None)
-                }
-
-                _ => Err(DBusError::InternalError(format!(
-                    "DBus in r/w mode received unexpected satisfy: {satisfy:?}"
-                ))),
-            },
+                Ok(())
+            }
+            State::Ready { writer, .. } => {
+                writer.satisfy_write(len, queue)?;
+                Ok(())
+            }
         }
     }
 
@@ -168,18 +206,5 @@ impl DBusConnection {
                 writer.stop();
             }
         }
-    }
-}
-
-fn new_unix_socket(path: &[u8]) -> sockaddr_un {
-    sockaddr_un {
-        sun_family: AF_UNIX as u16,
-        sun_path: {
-            let mut out = [0; 108];
-            for (idx, byte) in path.iter().enumerate() {
-                out[idx] = *byte as i8;
-            }
-            out
-        },
     }
 }

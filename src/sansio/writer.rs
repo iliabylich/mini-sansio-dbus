@@ -1,7 +1,6 @@
 use crate::{DBusError, DBusWants, sansio::DBusQueue};
 
 pub(crate) struct DBusWriter {
-    fd: i32,
     state: State,
     seq: u64,
 }
@@ -13,23 +12,23 @@ enum State {
 }
 
 impl DBusWriter {
-    pub(crate) const fn new(fd: i32, seq: u64) -> Self {
+    pub(crate) const fn new(seq: u64) -> Self {
         Self {
-            fd,
             state: State::Writing { bytes_written: 0 },
             seq,
         }
     }
 
-    pub(crate) fn wants(&self, queue: &DBusQueue) -> Option<DBusWants> {
+    pub(crate) fn wants<'writebuf>(
+        &self,
+        queue: &'writebuf DBusQueue,
+    ) -> Option<DBusWants<'static, 'writebuf>> {
         match self.state {
             State::Writing { bytes_written } => {
                 let buf = queue.front()?;
                 let remainder = &buf[bytes_written..];
                 Some(DBusWants::Write {
-                    fd: self.fd,
-                    buf: remainder.as_ptr(),
-                    len: remainder.len(),
+                    buf: remainder,
                     seq: self.seq,
                 })
             }
@@ -39,7 +38,7 @@ impl DBusWriter {
 
     pub(crate) fn satisfy_write(
         &mut self,
-        res: i32,
+        len: usize,
         queue: &mut DBusQueue,
     ) -> Result<(), DBusError> {
         match &mut self.state {
@@ -50,10 +49,7 @@ impl DBusWriter {
                     )
                 })?;
 
-                if res < 0 {
-                    return Err(DBusError::WriteError(format!("Write failed: {res}")));
-                }
-                *bytes_written += res as usize;
+                *bytes_written += len;
                 self.seq += 1;
 
                 if *bytes_written == buf.len() {

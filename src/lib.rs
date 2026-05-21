@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 #![warn(trivial_casts)]
@@ -13,8 +14,6 @@
 #![expect(clippy::redundant_pub_crate)]
 #![expect(clippy::cast_possible_truncation)]
 #![expect(clippy::arithmetic_side_effects)]
-#![expect(clippy::cast_possible_wrap)]
-#![expect(clippy::cast_sign_loss)]
 #![doc = include_str!("../README.md")]
 
 mod error;

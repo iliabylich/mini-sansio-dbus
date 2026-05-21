@@ -41,6 +41,7 @@ pub enum DBusError {
     NoSessionBusAddress,
     MalformedSessionBusAddress,
     NoDataAttachedToMethodCall,
+    DBusPathWithNull,
 }
 
 impl core::fmt::Display for DBusError {

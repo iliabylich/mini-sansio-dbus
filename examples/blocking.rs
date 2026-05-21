@@ -1,11 +1,10 @@
-use anyhow::{Context, Result, bail, ensure};
-use mini_sansio_dbus::{
-    DBusConnection, DBusQueue, DBusSatisfy, DBusWants, IncomingMessage, MessageType,
-};
+use anyhow::{Context, Result, bail};
+use mini_sansio_dbus::{DBusConnection, DBusQueue, DBusWants, IncomingMessage, MessageType};
+use std::os::fd::OwnedFd;
 
 struct BlockingDBus {
     conn: DBusConnection,
-    fd: Option<i32>,
+    fd: Option<OwnedFd>,
 }
 
 impl BlockingDBus {
@@ -19,18 +18,16 @@ impl BlockingDBus {
         let wants = self
             .conn
             .wants(queue, readerbuf)
-            .context("expected connect, got None")?;
+            .context("expected socket, got None")?;
         let DBusWants::Socket { domain, r#type, .. } = wants else {
             bail!("at first there must be connect, bug?");
         };
-        let res = unsafe { libc::socket(domain, r#type, 0) };
-        log::info!("socket() returned {res}");
-        ensure!(
-            self.conn
-                .satisfy(DBusSatisfy::Socket, res, readerbuf, queue)?
-                .is_none(),
-            "expected None"
-        );
+        let fd = rustix::net::socket(domain, r#type, None)?;
+        self.conn.satisfy_socket()?;
+
+        log::info!("socket() returned {fd:?}");
+        self.fd = Some(fd);
+
         Ok(())
     }
 
@@ -40,22 +37,14 @@ impl BlockingDBus {
             .conn
             .wants(queue, readerbuf)
             .context("expected connect, got None")?;
-        let DBusWants::Connect {
-            fd, addr, addrlen, ..
-        } = wants
-        else {
+        let DBusWants::Connect { addr, .. } = wants else {
             bail!("at first there must be connect, bug?");
         };
-        let res = unsafe { libc::connect(fd, addr, addrlen) };
-        log::info!("connect() returned {res}");
-        ensure!(
-            self.conn
-                .satisfy(DBusSatisfy::Connect, res, readerbuf, queue)?
-                .is_none(),
-            "expected None"
-        );
+        rustix::net::connect(self.fd.as_ref().expect("no FD"), &addr)?;
+        self.conn.satisfy_connect()?;
 
-        self.fd = Some(fd);
+        log::info!("connect() succeeded");
+
         Ok(())
     }
 
@@ -68,68 +57,27 @@ impl BlockingDBus {
         log::info!("<< {wants:?}");
 
         match wants {
-            DBusWants::Write { fd, buf, len, .. } => {
-                self.write(fd, buf, len, queue, readerbuf)?;
+            DBusWants::Write { buf, .. } => {
+                let len = rustix::io::write(self.fd.as_ref().expect("no FD"), buf)?;
+                self.conn.satisfy_write(len, queue)?;
                 Ok(None)
             }
-            DBusWants::Read { fd, buf, len, .. } => self.read(fd, buf, len, queue, readerbuf),
+            DBusWants::Read { buf, .. } => {
+                let len = rustix::io::read(self.fd.as_ref().expect("no FD"), buf)?;
+                self.conn.satisfy_read(len, readerbuf).map_err(Into::into)
+            }
             DBusWants::ReadWrite {
-                fd,
-                readbuf,
-                readlen,
-                writebuf,
-                writelen,
-                ..
+                readbuf, writebuf, ..
             } => {
-                self.write(fd, writebuf, writelen, queue, readerbuf)?;
-                self.read(fd, readbuf, readlen, queue, readerbuf)
+                let writelen = rustix::io::write(self.fd.as_ref().expect("no FD"), writebuf)?;
+                let readlen = rustix::io::read(self.fd.as_ref().expect("no FD"), readbuf)?;
+
+                self.conn.satisfy_write(writelen, queue)?;
+                self.conn
+                    .satisfy_read(readlen, readerbuf)
+                    .map_err(Into::into)
             }
             _ => unreachable!("wants {wants:?}"),
-        }
-    }
-
-    fn read<'a>(
-        &mut self,
-        fd: i32,
-        buf: *mut u8,
-        len: usize,
-        queue: &mut DBusQueue,
-        readerbuf: &'a mut Vec<u8>,
-    ) -> Result<Option<IncomingMessage<'a>>> {
-        let res = unsafe { libc::read(fd, buf.cast(), len) } as i32;
-        log::info!(">> written {res}");
-        let out = self
-            .conn
-            .satisfy(DBusSatisfy::Read, res, readerbuf, queue)?;
-        Ok(out)
-    }
-
-    fn write(
-        &mut self,
-        fd: i32,
-        buf: *const u8,
-        len: usize,
-        queue: &mut DBusQueue,
-        readerbuf: &mut Vec<u8>,
-    ) -> Result<()> {
-        let res = unsafe { libc::write(fd, buf.cast(), len) } as i32;
-        log::info!(">> written {res}");
-        ensure!(
-            self.conn
-                .satisfy(DBusSatisfy::Write, res as i32, readerbuf, queue)?
-                .is_none(),
-            "write never returns a message"
-        );
-        Ok(())
-    }
-}
-
-impl Drop for BlockingDBus {
-    fn drop(&mut self) {
-        if let Some(fd) = self.fd {
-            unsafe {
-                libc::close(fd);
-            }
         }
     }
 }
