@@ -103,7 +103,7 @@ where
         self.state = OneshotState::ReplyReceived;
 
         match message.message_type {
-            MessageType::Error => Err(DBusError::DBusError(format!("{:?}", message.error_name))),
+            MessageType::Error => Err(DBusError::DBusError),
             MessageType::MethodReturn => {
                 if let Some(body) = message.body {
                     Ok((self.try_process)(body, self.data.clone()).ok())

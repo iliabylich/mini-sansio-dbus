@@ -95,7 +95,9 @@ fn main() -> Result<()> {
     loop {
         if let Some(message) = dbus.read_write(&mut queue, &mut readerbuf)? {
             log::info!("Recived");
-            message.log()?;
+            let mut buf = String::new();
+            message.log(&mut buf)?;
+            eprintln!("{buf}");
 
             if message.message_type == MessageType::Signal
                 && message

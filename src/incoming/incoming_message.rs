@@ -88,27 +88,27 @@ impl<'a> IncomingMessage<'a> {
     /// # Errors
     ///
     /// Returns an error if any lazily parsed value inside `self` are invalid
-    pub fn log(&self) -> Result<(), DBusError> {
-        eprintln!("============");
-        eprintln!("Type = {:?}", self.message_type);
-        eprintln!("Serial = {}", self.serial);
-        eprintln!("Path = {:?}", self.path);
-        eprintln!("Interface = {:?}", self.interface);
-        eprintln!("Member = {:?}", self.member);
-        eprintln!("ErrorName = {:?}", self.error_name);
-        eprintln!("ReplySerial = {:?}", self.reply_serial);
-        eprintln!("Destination = {:?}", self.destination);
-        eprintln!("Sender = {:?}", self.sender);
-        eprintln!("Signature = {:?}", self.signature);
-        eprintln!("UnixFDs = {:?}", self.unix_fds);
+    pub fn log(&self, w: &mut impl core::fmt::Write) -> Result<(), core::fmt::Error> {
+        writeln!(w, "============")?;
+        writeln!(w, "Type = {:?}", self.message_type)?;
+        writeln!(w, "Serial = {}", self.serial)?;
+        writeln!(w, "Path = {:?}", self.path)?;
+        writeln!(w, "Interface = {:?}", self.interface)?;
+        writeln!(w, "Member = {:?}", self.member)?;
+        writeln!(w, "ErrorName = {:?}", self.error_name)?;
+        writeln!(w, "ReplySerial = {:?}", self.reply_serial)?;
+        writeln!(w, "Destination = {:?}", self.destination)?;
+        writeln!(w, "Sender = {:?}", self.sender)?;
+        writeln!(w, "Signature = {:?}", self.signature)?;
+        writeln!(w, "UnixFDs = {:?}", self.unix_fds)?;
 
         if let Some(mut body) = self.body {
-            eprintln!("Body:");
-            while let Some(value) = body.try_next()? {
-                value.log(4)?;
+            writeln!(w, "Body:")?;
+            while let Some(value) = body.try_next().map_err(|_| core::fmt::Error)? {
+                value.log(w, 4)?;
             }
         }
-        eprintln!("============");
+        writeln!(w, "============")?;
 
         Ok(())
     }

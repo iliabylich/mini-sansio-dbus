@@ -121,9 +121,7 @@ impl DBusConnection {
     /// Fails is operation is not the one that was last returned from `wants`
     pub fn satisfy_socket(&mut self) -> Result<(), DBusError> {
         let State::Connecting(connector) = &mut self.state else {
-            return Err(DBusError::InternalError(
-                "DBus in r/w mode received unexpected satisfy: Socket".to_string(),
-            ));
+            return Err(DBusError::InternalError);
         };
 
         connector.satisfy_socket()?;
@@ -137,9 +135,7 @@ impl DBusConnection {
     /// Fails is operation is not the one that was last returned from `wants`
     pub fn satisfy_connect(&mut self) -> Result<(), DBusError> {
         let State::Connecting(connector) = &mut self.state else {
-            return Err(DBusError::InternalError(
-                "DBus in r/w mode received unexpected satisfy: Connect".to_string(),
-            ));
+            return Err(DBusError::InternalError);
         };
 
         connector.satisfy_connect()?;

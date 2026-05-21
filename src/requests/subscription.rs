@@ -57,12 +57,7 @@ impl<T> Subscription<T> {
 
     fn try_process(&self, message: IncomingMessage<'_>) -> Result<T, Box<dyn core::error::Error>> {
         if message.message_type != MessageType::Signal {
-            return Err(DBusError::WrongMessageType(format!(
-                "expected: {:?}, got: {:?}",
-                MessageType::Signal,
-                message.message_type
-            ))
-            .into());
+            return Err(DBusError::WrongMessageType.into());
         }
 
         let interface = message.interface.ok_or(DBusError::NoInterface)?;
@@ -71,7 +66,7 @@ impl<T> Subscription<T> {
         let body = message.body.ok_or(DBusError::NoBody)?;
 
         let SubscriptionState::Subscribed(subscribed_to) = self.state.clone() else {
-            return Err(DBusError::InternalError("not subscribed".to_string()).into());
+            return Err(DBusError::InternalError.into());
         };
 
         (self.try_process)(body, path.to_string(), subscribed_to)

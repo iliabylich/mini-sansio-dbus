@@ -27,11 +27,7 @@ impl IntrospectibleObjectAt {
         message: IncomingMessage<'a>,
     ) -> Result<(u32, &'a str, IntrospectibleObjectAtRequest<'a>), DBusError> {
         if message.message_type != MessageType::MethodCall {
-            return Err(DBusError::WrongMessageType(format!(
-                "expected: {:?}, got: {:?}",
-                MessageType::MethodCall,
-                message.message_type
-            )));
+            return Err(DBusError::WrongMessageType);
         }
 
         let serial = message.serial;
@@ -47,13 +43,13 @@ impl IntrospectibleObjectAt {
         let req = match interface {
             "org.freedesktop.DBus.Introspectable" => match member {
                 "Introspect" => IntrospectibleObjectAtRequest::Introspect { path },
-                _ => return Err(DBusError::UnknownMember(member.to_string())),
+                _ => return Err(DBusError::UnknownMember),
             },
 
             "org.freedesktop.DBus.Peer" => match member {
                 "GetMachinId" => IntrospectibleObjectAtRequest::GetMachineId,
                 "Ping" => IntrospectibleObjectAtRequest::Ping,
-                _ => return Err(DBusError::UnknownMember(member.to_string())),
+                _ => return Err(DBusError::UnknownMember),
             },
 
             "org.freedesktop.DBus.Properties" => match member {
@@ -77,10 +73,10 @@ impl IntrospectibleObjectAt {
                     IntrospectibleObjectAtRequest::GetAllProperties { path, interface }
                 }
                 "Set" => IntrospectibleObjectAtRequest::SetProperty,
-                _ => return Err(DBusError::UnknownMember(member.to_string())),
+                _ => return Err(DBusError::UnknownMember),
             },
 
-            _ => return Err(DBusError::UnknownInterface(interface.to_string())),
+            _ => return Err(DBusError::UnknownInterface),
         };
 
         Ok((serial, sender, req))

@@ -43,11 +43,7 @@ impl DBusWriter {
     ) -> Result<(), DBusError> {
         match &mut self.state {
             State::Writing { bytes_written } => {
-                let buf = queue.front().ok_or_else(|| {
-                    DBusError::InternalError(
-                        "empty Queue, can't process Satisfy::Write".to_string(),
-                    )
-                })?;
+                let buf = queue.front().ok_or(DBusError::InternalError)?;
 
                 *bytes_written += len;
                 self.seq += 1;

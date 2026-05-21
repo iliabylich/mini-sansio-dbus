@@ -105,12 +105,9 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn satisfy_socket(&mut self) -> Result<(), DBusError> {
+    pub(crate) const fn satisfy_socket(&mut self) -> Result<(), DBusError> {
         if !matches!(self.state, State::Socket) {
-            return Err(DBusError::InternalError(format!(
-                "malformed state: {:?} vs Socket",
-                self.state,
-            )));
+            return Err(DBusError::InternalError);
         }
 
         self.state = State::Connect;
@@ -118,12 +115,9 @@ impl DBusConnector {
         Ok(())
     }
 
-    pub(crate) fn satisfy_connect(&mut self) -> Result<(), DBusError> {
+    pub(crate) const fn satisfy_connect(&mut self) -> Result<(), DBusError> {
         if !matches!(self.state, State::Connect) {
-            return Err(DBusError::InternalError(format!(
-                "malformed state: {:?} vs Connect",
-                self.state,
-            )));
+            return Err(DBusError::InternalError);
         }
 
         self.state = State::WriteZero;
@@ -152,9 +146,7 @@ impl DBusConnector {
                 }
                 Ok(())
             }
-            state => Err(DBusError::InternalError(format!(
-                "malformed state: {state:?} for Read"
-            ))),
+            _ => Err(DBusError::InternalError),
         }
     }
 
@@ -200,9 +192,7 @@ impl DBusConnector {
                     Ok(None)
                 }
             }
-            state => Err(DBusError::InternalError(format!(
-                "malformed state: {state:?} for Write"
-            ))),
+            _ => Err(DBusError::InternalError),
         }
     }
 

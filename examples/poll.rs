@@ -169,7 +169,9 @@ fn main() -> Result<()> {
                 blocked_on,
             } => {
                 if let Some(message) = message {
-                    message.log()?;
+                    let mut buf = String::new();
+                    message.log(&mut buf)?;
+                    eprintln!("{buf}");
 
                     if let Some(primary_connection) = try_parse_primary_connection_path_reply(
                         message,

@@ -89,49 +89,53 @@ impl<'a> IncomingValue<'a> {
     /// # Errors
     ///
     /// Returns an error if some parts of the message that are parsed in a lazy manner are invalid
-    pub fn log(&self, indent: usize) -> Result<(), DBusError> {
+    pub fn log(
+        &self,
+        w: &mut impl core::fmt::Write,
+        indent: usize,
+    ) -> Result<(), core::fmt::Error> {
         let offset = " ".repeat(indent);
 
         match self {
-            Self::Byte(n) => eprintln!("{offset}u8: {n}"),
-            Self::Bool(bool) => eprintln!("{offset}bool: {bool}"),
-            Self::Int16(n) => eprintln!("{offset}i16: {n}"),
-            Self::UInt16(n) => eprintln!("{offset}u16: {n}"),
-            Self::Int32(n) => eprintln!("{offset}i32: {n}"),
-            Self::UInt32(n) => eprintln!("{offset}u32: {n}"),
-            Self::Int64(n) => eprintln!("{offset}i64: {n}"),
-            Self::UInt64(n) => eprintln!("{offset}u64: {n}"),
-            Self::Double(n) => eprintln!("{offset}double: {n}"),
-            Self::UnixFD(n) => eprintln!("{offset}unixfd: {n}"),
-            Self::String(s) => eprintln!("{offset}string: {s:?}"),
-            Self::ObjectPath(path) => eprintln!("{offset}path: {path:?}"),
-            Self::Signature(signature) => eprintln!("{offset}signature: {signature:?}"),
+            Self::Byte(n) => writeln!(w, "{offset}u8: {n}")?,
+            Self::Bool(bool) => writeln!(w, "{offset}bool: {bool}")?,
+            Self::Int16(n) => writeln!(w, "{offset}i16: {n}")?,
+            Self::UInt16(n) => writeln!(w, "{offset}u16: {n}")?,
+            Self::Int32(n) => writeln!(w, "{offset}i32: {n}")?,
+            Self::UInt32(n) => writeln!(w, "{offset}u32: {n}")?,
+            Self::Int64(n) => writeln!(w, "{offset}i64: {n}")?,
+            Self::UInt64(n) => writeln!(w, "{offset}u64: {n}")?,
+            Self::Double(n) => writeln!(w, "{offset}double: {n}")?,
+            Self::UnixFD(n) => writeln!(w, "{offset}unixfd: {n}")?,
+            Self::String(s) => writeln!(w, "{offset}string: {s:?}")?,
+            Self::ObjectPath(path) => writeln!(w, "{offset}path: {path:?}")?,
+            Self::Signature(signature) => writeln!(w, "{offset}signature: {signature:?}")?,
             Self::Struct(struct_) => {
-                let mut iter = struct_.fields_iter()?;
-                eprintln!("{offset}struct:");
-                while let Some(item) = iter.try_next()? {
-                    item.log(indent + 4)?;
+                let mut iter = struct_.fields_iter().map_err(|_| core::fmt::Error)?;
+                writeln!(w, "{offset}struct:")?;
+                while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
+                    item.log(w, indent + 4)?;
                 }
             }
             Self::Array(array) => {
                 let mut iter = array.items_iter();
-                eprintln!("{offset}array:");
-                while let Some(item) = iter.try_next()? {
-                    item.log(indent + 4)?;
+                writeln!(w, "{offset}array:")?;
+                while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
+                    item.log(w, indent + 4)?;
                 }
             }
             Self::DictEntry(pair) => {
-                eprintln!("{offset}dict:");
-                let (key, value) = pair.key_value()?;
-                eprintln!("{offset}    key:");
-                key.log(indent + 8)?;
-                eprintln!("{offset}    value:");
-                value.log(indent + 8)?;
+                writeln!(w, "{offset}dict:")?;
+                let (key, value) = pair.key_value().map_err(|_| core::fmt::Error)?;
+                writeln!(w, "{offset}    key:")?;
+                key.log(w, indent + 8)?;
+                writeln!(w, "{offset}    value:")?;
+                value.log(w, indent + 8)?;
             }
             Self::Variant(variant) => {
-                eprintln!("{offset}variant:");
-                let value = variant.materialize()?;
-                value.log(indent + 4)?;
+                writeln!(w, "{offset}variant:")?;
+                let value = variant.materialize().map_err(|_| core::fmt::Error)?;
+                value.log(w, indent + 4)?;
             }
         }
 

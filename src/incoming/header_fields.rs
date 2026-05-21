@@ -23,10 +23,7 @@ impl<'a> HeaderField<'a> {
         macro_rules! ensure_header_sig {
             ($expected:literal, $field:literal) => {
                 if sig != $expected {
-                    return Err(DBusError::MalformedHeaderField(format!(
-                        "header field {} expects variant sig {:?}, got {:?}",
-                        $field, $expected, sig
-                    )));
+                    return Err(DBusError::MalformedHeaderField);
                 }
             };
         }
@@ -113,9 +110,7 @@ impl<'a> HeaderFields<'a> {
 
             match header {
                 HeaderField::Invalid => {
-                    return Err(DBusError::MalformedHeaderField(
-                        "received Invalid header field".to_string(),
-                    ));
+                    return Err(DBusError::MalformedHeaderField);
                 }
                 HeaderField::Path(path) => this.path = Some(path),
                 HeaderField::Interface(interface) => this.interface = Some(interface),

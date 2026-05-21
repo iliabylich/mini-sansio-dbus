@@ -9,11 +9,7 @@ pub mod org_freedesktop_dbus;
 macro_rules! interface_is {
     ($interface:expr, $expected:expr) => {{
         if $interface != $expected {
-            return Err($crate::DBusError::WrongInterface(format!(
-                "expected: {:?}, got: {:?}",
-                $expected, $interface
-            ))
-            .into());
+            return Err($crate::DBusError::WrongInterface.into());
         }
     }};
 }
@@ -23,11 +19,7 @@ macro_rules! interface_is {
 macro_rules! destination_is {
     ($destination:expr, $expected:expr) => {{
         if $destination != $expected {
-            return Err($crate::DBusError::WrongDestination(format!(
-                "expected: {:?}, got: {:?}",
-                $expected, $destination
-            ))
-            .into());
+            return Err($crate::DBusError::WrongDestination.into());
         }
     }};
 }
@@ -37,11 +29,7 @@ macro_rules! destination_is {
 macro_rules! sender_is {
     ($sender:expr, $expected:expr) => {{
         if $sender != $expected {
-            return Err($crate::DBusError::WrongSender(format!(
-                "expected: {:?}, got: {:?}",
-                $expected, $sender
-            ))
-            .into());
+            return Err($crate::DBusError::WrongSender.into());
         }
     }};
 }
@@ -51,11 +39,7 @@ macro_rules! sender_is {
 macro_rules! path_is {
     ($path:expr, $expected:expr) => {{
         if $path != $expected {
-            return Err($crate::DBusError::WrongPath(format!(
-                "expected: {:?}, got: {:?}",
-                $expected, $path
-            ))
-            .into());
+            return Err($crate::DBusError::WrongPath.into());
         }
     }};
 }
@@ -65,11 +49,7 @@ macro_rules! path_is {
 macro_rules! member_is {
     ($member:expr, $expected:expr) => {{
         if $member != $expected {
-            return Err($crate::DBusError::WrongMember(format!(
-                "expected: {:?}, got: {:?}",
-                $expected, $member
-            ))
-            .into());
+            return Err($crate::DBusError::WrongMember.into());
         }
     }};
 }
@@ -79,7 +59,7 @@ macro_rules! member_is {
 macro_rules! value_is {
     ($value:expr, $pat:pat) => {
         let $pat = $value else {
-            return Err($crate::DBusError::WrongValue(format!("{:?}", $value)).into());
+            return Err($crate::DBusError::WrongValue.into());
         };
     };
 }

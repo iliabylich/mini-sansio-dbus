@@ -18,11 +18,7 @@ impl TryFrom<IncomingMessage<'_>> for IntrospectRequest {
 
     fn try_from(message: IncomingMessage) -> Result<Self, Self::Error> {
         if message.message_type != MessageType::MethodCall {
-            return Err(DBusError::WrongMessageType(format!(
-                "expected: {:?}, got: {:?}",
-                MessageType::MethodCall,
-                message.message_type
-            )));
+            return Err(DBusError::WrongMessageType);
         }
 
         let serial = message.serial;
