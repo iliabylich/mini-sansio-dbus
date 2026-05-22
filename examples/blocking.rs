@@ -1,5 +1,7 @@
 use anyhow::{Context, Result, bail};
-use mini_sansio_dbus::{DBusConnection, DBusQueue, DBusWants, IncomingMessage, MessageType};
+use mini_sansio_dbus::{
+    DBusConnection, DBusQueue, DBusWants, IncomingMessage, MessageType, SliceMessageEncoder,
+};
 use std::os::fd::OwnedFd;
 
 struct BlockingDBus {
@@ -86,8 +88,9 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = BlockingDBus::new()?;
-    let mut queue = DBusQueue::new();
+    let mut queue = DBusQueue::empty();
     let mut readerbuf = vec![];
+    enqueue_hello(&mut queue)?;
 
     dbus.socket(&mut queue, &mut readerbuf)?;
     dbus.connect(&mut queue, &mut readerbuf)?;
@@ -111,4 +114,17 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn enqueue_hello(queue: &mut DBusQueue) -> Result<u32> {
+    queue
+        .push_encoded(256, |serial, buf| {
+            let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, serial)?;
+            encoder.set_path("/org/freedesktop/DBus")?;
+            encoder.set_interface("org.freedesktop.DBus")?;
+            encoder.set_member("Hello")?;
+            encoder.set_destination("org.freedesktop.DBus")?;
+            encoder.finish()
+        })
+        .map_err(Into::into)
 }

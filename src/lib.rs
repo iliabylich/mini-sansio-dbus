@@ -24,6 +24,7 @@ mod outgoing;
 mod requests;
 mod sansio;
 mod satisfy;
+mod slice_encoder;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -42,5 +43,10 @@ pub use outgoing::{OutgoingCompleteType, OutgoingMessage, OutgoingSignature, Out
 pub use requests::{IncompleteMethodCall, MethodCall, Subscription};
 pub use sansio::{DBusConnection, DBusQueue};
 pub use satisfy::DBusSatisfy;
+pub use slice_encoder::{
+    Array, ArraySlot, DbusType, DictEntry, DictEntrySlot, EncodeError,
+    MessageEncoder as SliceMessageEncoder, ObjectPath, Signature, Slot, Str, Struct2, Struct2Slot,
+    UnixFd, Variant, VariantSlot, WriteValue,
+};
 pub use types::MessageType;
 pub use wants::DBusWants;

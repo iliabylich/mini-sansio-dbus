@@ -1,5 +1,6 @@
 use crate::{
-    DBusError, IncomingValue, MessageType, OutgoingCompleteType, OutgoingMessage, OutgoingValue,
+    Array, DBusError, DictEntry, IncomingValue, MessageType, ObjectPath, OutgoingCompleteType,
+    OutgoingMessage, OutgoingValue, Signature, SliceMessageEncoder, Str, Struct2, UnixFd, Variant,
     outgoing::MessageEncoder,
 };
 
@@ -63,6 +64,59 @@ fn message_with_known_value_types() -> OutgoingMessage {
 
 fn encoded_message_blob() -> Vec<u8> {
     MESSAGE_BLOB.to_vec()
+}
+
+#[test]
+fn slice_encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::EncodeError> {
+    let mut buf = vec![0; 512];
+    let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 42)?;
+    encoder.set_path("/org/example/Object")?;
+    encoder.set_interface("org.example.Interface")?;
+    encoder.set_member("AllTypes")?;
+    encoder.set_destination("org.example.Service")?;
+    encoder.set_sender(":1.100")?;
+    encoder.set_unix_fds(1)?;
+    encoder.set_body_signature("ybnqiuxtdhsog(su)aq{su}v")?;
+
+    encoder.next_body_slot::<u8>()?.write(0x2a)?;
+    encoder.next_body_slot::<bool>()?.write(true)?;
+    encoder.next_body_slot::<i16>()?.write(-1234)?;
+    encoder.next_body_slot::<u16>()?.write(1234)?;
+    encoder.next_body_slot::<i32>()?.write(-123_456)?;
+    encoder.next_body_slot::<u32>()?.write(123_456)?;
+    encoder.next_body_slot::<i64>()?.write(-123_456_789)?;
+    encoder.next_body_slot::<u64>()?.write(123_456_789)?;
+    encoder.next_body_slot::<f64>()?.write(12.5)?;
+    encoder.next_body_slot::<UnixFd>()?.write(0)?;
+    encoder.next_body_slot::<Str>()?.write("hello")?;
+    encoder
+        .next_body_slot::<ObjectPath>()?
+        .write("/org/example/Value")?;
+    encoder.next_body_slot::<Signature>()?.write("su")?;
+    {
+        let mut slot = encoder.next_body_slot::<Struct2<Str, u32>>()?;
+        slot.first_slot()?.write("inside-struct")?;
+        slot.second_slot()?.write(77)?;
+    }
+    {
+        let mut array = encoder.next_body_slot::<Array<u16>>()?;
+        array.next_slot()?.write(7)?;
+        array.next_slot()?.write(8)?;
+    }
+    {
+        let mut slot = encoder.next_body_slot::<DictEntry<Str, u32>>()?;
+        slot.key_slot()?.write("dict-key")?;
+        slot.value_slot()?.write(99)?;
+    }
+    {
+        let mut slot = encoder.next_body_slot::<Variant<i32>>()?;
+        slot.payload_slot()?.write(-9)?;
+    }
+    let len = encoder.finish()?;
+
+    assert_eq!(&buf[..len], MESSAGE_BLOB);
+
+    Ok(())
 }
 
 #[test]

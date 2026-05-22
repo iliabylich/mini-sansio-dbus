@@ -1,7 +1,7 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
     DBusConnection, DBusQueue, DBusWants, IncomingMessage, IncomingValue, MessageType,
-    messages::org_freedesktop_dbus::GetProperty, value_is,
+    SliceMessageEncoder, Str, value_is,
 };
 use rustix::{
     event::{PollFd, PollFlags},
@@ -148,8 +148,9 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = PollDBus::new()?;
-    let mut queue = DBusQueue::new();
+    let mut queue = DBusQueue::empty();
     let mut readerbuf = vec![];
+    enqueue_hello(&mut queue)?;
 
     let mut primary_connection_path_reply_serial = 0;
     let mut primary_connection_id_reply_serial = 0;
@@ -157,12 +158,13 @@ fn main() -> Result<()> {
     loop {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
-                primary_connection_path_reply_serial = queue.push_back(GetProperty::build(
+                primary_connection_path_reply_serial = enqueue_get_property(
+                    &mut queue,
                     "org.freedesktop.NetworkManager",
                     "/org/freedesktop/NetworkManager",
                     "org.freedesktop.NetworkManager",
                     "PrimaryConnection",
-                ));
+                )?;
             }
             ProcessResult::ReadWrite {
                 message,
@@ -179,12 +181,13 @@ fn main() -> Result<()> {
                     )? {
                         log::info!("Primary connection: {primary_connection}");
 
-                        primary_connection_id_reply_serial = queue.push_back(GetProperty::build(
+                        primary_connection_id_reply_serial = enqueue_get_property(
+                            &mut queue,
                             "org.freedesktop.NetworkManager",
                             primary_connection,
                             "org.freedesktop.NetworkManager.Connection.Active",
                             "Id",
-                        ));
+                        )?;
                     }
 
                     if let Some(id) = try_parse_primary_connection_id_reply(
@@ -204,6 +207,41 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn enqueue_hello(queue: &mut DBusQueue) -> Result<u32> {
+    queue
+        .push_encoded(256, |serial, buf| {
+            let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, serial)?;
+            encoder.set_path("/org/freedesktop/DBus")?;
+            encoder.set_interface("org.freedesktop.DBus")?;
+            encoder.set_member("Hello")?;
+            encoder.set_destination("org.freedesktop.DBus")?;
+            encoder.finish()
+        })
+        .map_err(Into::into)
+}
+
+fn enqueue_get_property(
+    queue: &mut DBusQueue,
+    destination: &str,
+    path: &str,
+    interface: &str,
+    property: &str,
+) -> Result<u32> {
+    queue
+        .push_encoded(512, |serial, buf| {
+            let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, serial)?;
+            encoder.set_path(path)?;
+            encoder.set_interface("org.freedesktop.DBus.Properties")?;
+            encoder.set_member("Get")?;
+            encoder.set_destination(destination)?;
+            encoder.set_body_signature("ss")?;
+            encoder.next_body_slot::<Str>()?.write(interface)?;
+            encoder.next_body_slot::<Str>()?.write(property)?;
+            encoder.finish()
+        })
+        .map_err(Into::into)
 }
 
 fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {

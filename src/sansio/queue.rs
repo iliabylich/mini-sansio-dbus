@@ -42,6 +42,25 @@ impl DBusQueue {
         message.serial()
     }
 
+    /// Pushes bytes produced by a caller-provided encoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error produced by the provided encoder.
+    pub fn push_encoded<E>(
+        &mut self,
+        capacity: usize,
+        encode: impl FnOnce(u32, &mut [u8]) -> Result<usize, E>,
+    ) -> Result<u32, E> {
+        let serial = self.serial;
+        let mut buf = vec![0; capacity];
+        let len = encode(serial, &mut buf)?;
+        buf.truncate(len);
+        self.serial += 1;
+        self.q.push_back(buf);
+        Ok(serial)
+    }
+
     pub(crate) fn pop_front(&mut self) -> Option<Vec<u8>> {
         self.q.pop_front()
     }
