@@ -24,6 +24,8 @@ mod outgoing;
 mod requests;
 mod sansio;
 mod satisfy;
+#[cfg(test)]
+mod tests;
 mod types;
 mod wants;
 
