@@ -45,7 +45,7 @@ impl Default for DBusSerial {
 }
 
 /// A caller-owned queue of encoded outgoing messages.
-pub trait OutgoingQueue {
+pub trait OutgoingQueue<'a> {
     /// Allocates and returns the next outgoing message serial.
     fn next_serial(&mut self) -> u32;
 
@@ -55,7 +55,7 @@ pub trait OutgoingQueue {
     ///
     /// Returns an error if the message is too short to contain a D-Bus header, or if the queue
     /// cannot accept another message.
-    fn push(&mut self, message: &mut [u8]) -> Result<u32, DBusError>;
+    fn push(&mut self, message: &'a mut [u8]) -> Result<u32, DBusError>;
 
     /// Returns the first queued message.
     fn peek(&self) -> Option<&[u8]>;

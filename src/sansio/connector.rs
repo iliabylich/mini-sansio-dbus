@@ -71,7 +71,7 @@ impl DBusConnector {
             }
 
             State::ReadData { bytes_read } => {
-                let buf = &mut buf[bytes_read..DATA.len()];
+                let buf = buf.get_mut(bytes_read..DATA.len())?;
                 Some(DBusWants::Read { buf, seq: self.seq })
             }
 
@@ -84,7 +84,7 @@ impl DBusConnector {
             }
 
             State::ReadGUID { bytes_read } => {
-                let buf = &mut buf[bytes_read..GUID_LENGTH];
+                let buf = buf.get_mut(bytes_read..GUID_LENGTH)?;
                 Some(DBusWants::Read { buf, seq: self.seq })
             }
 

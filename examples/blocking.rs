@@ -7,12 +7,12 @@ use mini_sansio_dbus::{
 use std::{collections::VecDeque, os::fd::OwnedFd};
 
 #[derive(Debug, Default)]
-struct ExampleQueue {
+struct ExampleQueue<'a> {
     serial: DBusSerial,
-    messages: VecDeque<Vec<u8>>,
+    messages: VecDeque<&'a [u8]>,
 }
 
-impl ExampleQueue {
+impl ExampleQueue<'_> {
     fn new() -> Self {
         Self {
             serial: DBusSerial::new(),
@@ -21,22 +21,22 @@ impl ExampleQueue {
     }
 }
 
-impl OutgoingQueue for ExampleQueue {
+impl<'a> OutgoingQueue<'a> for ExampleQueue<'a> {
     fn next_serial(&mut self) -> u32 {
         let serial = self.serial.current();
         self.serial.advance();
         serial
     }
 
-    fn push(&mut self, message: &mut [u8]) -> Result<u32, DBusError> {
+    fn push(&mut self, message: &'a mut [u8]) -> Result<u32, DBusError> {
         let serial = self.next_serial();
         DBusSerial::write_to_message(message, serial)?;
-        self.messages.push_back(message.to_vec());
+        self.messages.push_back(message);
         Ok(serial)
     }
 
     fn peek(&self) -> Option<&[u8]> {
-        self.messages.front().map(Vec::as_slice)
+        self.messages.front().copied()
     }
 
     fn pop(&mut self) {
@@ -134,17 +134,15 @@ fn main() -> Result<()> {
     let mut dbus = BlockingDBus::new()?;
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
-    {
-        let mut buf = const { Hello::ENCODED };
-        queue.push(&mut buf)?;
-    }
+    let mut hellobuf = const { Hello::ENCODED };
+    queue.push(&mut hellobuf)?;
 
     dbus.socket(&queue, &mut readerbuf)?;
     dbus.connect(&queue, &mut readerbuf)?;
 
     loop {
         if let Some(message) = dbus.read_write(&mut queue, &mut readerbuf)? {
-            log::info!("Recived");
+            log::info!("Received");
             let mut buf = String::new();
             message.log(&mut buf)?;
             eprintln!("{buf}");

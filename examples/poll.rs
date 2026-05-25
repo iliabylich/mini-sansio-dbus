@@ -29,7 +29,7 @@ impl ExampleQueue {
     }
 }
 
-impl OutgoingQueue for ExampleQueue {
+impl OutgoingQueue<'_> for ExampleQueue {
     fn next_serial(&mut self) -> u32 {
         let serial = self.serial.current();
         self.serial.advance();
