@@ -73,8 +73,13 @@ struct PollDBus {
 
 impl PollDBus {
     fn new() -> Result<Self> {
+        let socket_path = std::env::var("DBUS_SYSTEM_BUS_ADDRESS")
+            .ok()
+            .and_then(|address| address.split_once('=').map(|(_, path)| path.to_string()))
+            .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"));
+
         Ok(Self {
-            conn: DBusConnection::new_system()?,
+            conn: DBusConnection::new_system(&socket_path)?,
             fd: None,
         })
     }

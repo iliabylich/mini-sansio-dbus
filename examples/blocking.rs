@@ -51,7 +51,11 @@ struct BlockingDBus {
 
 impl BlockingDBus {
     fn new() -> Result<Self> {
-        let conn = DBusConnection::new_session()?;
+        let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")?;
+        let (_, address) = address
+            .split_once('=')
+            .context("malformed $DBUS_SESSION_BUS_ADDRESS")?;
+        let conn = DBusConnection::new_session(address)?;
         Ok(Self { conn, fd: None })
     }
 

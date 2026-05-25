@@ -43,37 +43,25 @@ impl DBusConnection {
 
     /// Constructs a new session connection
     ///
+    /// Takes `address` which is usually `$DBUS_SESSION_BUS_ADDRESS`.
+    ///
     /// # Errors
     ///
-    /// Fails if `$DBUS_SESSION_BUS_ADDRESS` env variable isn't set or contains NULL.
-    pub fn new_session() -> Result<Self, DBusError> {
-        let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")
-            .map_err(|_| DBusError::NoSessionBusAddress)?;
-        let (_, path) = address
-            .split_once('=')
-            .ok_or(DBusError::MalformedSessionBusAddress)?;
-
-        let addr = SocketAddrUnix::new(path.as_bytes()).map_err(|_| DBusError::DBusPathWithNull)?;
-
+    /// Fails if given address contains NULL.
+    pub fn new_session(address: &str) -> Result<Self, DBusError> {
+        let addr = SocketAddrUnix::new(address).map_err(|_| DBusError::DBusPathWithNull)?;
         Ok(Self::new(addr))
     }
 
     /// Constructs a new system connection
     ///
+    /// Takes `address` which is usually either `$DBUS_SYSTEM_BUS_ADDRESS` or `/var/run/dbus/system_bus_socket`.
+    ///
     /// # Errors
     ///
-    /// Fails if session UNIX address contains NULL.
-    pub fn new_system() -> Result<Self, DBusError> {
-        fn socket_path() -> String {
-            std::env::var("DBUS_SYSTEM_BUS_ADDRESS")
-                .ok()
-                .and_then(|address| address.split_once('=').map(|(_, path)| path.to_string()))
-                .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"))
-        }
-
-        let addr = SocketAddrUnix::new(socket_path().as_bytes())
-            .map_err(|_| DBusError::DBusPathWithNull)?;
-
+    /// Fails if given address contains NULL.
+    pub fn new_system(address: &str) -> Result<Self, DBusError> {
+        let addr = SocketAddrUnix::new(address).map_err(|_| DBusError::DBusPathWithNull)?;
         Ok(Self::new(addr))
     }
 
