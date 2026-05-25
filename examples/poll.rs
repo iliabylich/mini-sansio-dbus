@@ -16,22 +16,31 @@ use std::{
 
 #[derive(Debug, Default)]
 struct ExampleQueue {
+    serial: DBusSerial,
     messages: VecDeque<Vec<u8>>,
 }
 
 impl ExampleQueue {
     fn new() -> Self {
         Self {
+            serial: DBusSerial::new(),
             messages: VecDeque::new(),
         }
     }
 }
 
 impl OutgoingQueue for ExampleQueue {
-    fn push(&mut self, message: &mut [u8], serial: u32) -> Result<(), DBusError> {
+    fn next_serial(&mut self) -> u32 {
+        let serial = self.serial.current();
+        self.serial.advance();
+        serial
+    }
+
+    fn push(&mut self, message: &mut [u8]) -> Result<u32, DBusError> {
+        let serial = self.next_serial();
         DBusSerial::write_to_message(message, serial)?;
         self.messages.push_back(message.to_vec());
-        Ok(())
+        Ok(serial)
     }
 
     fn front(&self) -> Option<&[u8]> {
@@ -43,26 +52,18 @@ impl OutgoingQueue for ExampleQueue {
     }
 }
 
-fn encode_and_queue<Q, B, M>(
-    serial: &mut DBusSerial,
-    queue: &mut Q,
-    mut buf: B,
-    message: &M,
-) -> Result<u32, DBusError>
+fn encode_and_queue<Q, B, M>(queue: &mut Q, mut buf: B, message: &M) -> Result<u32, DBusError>
 where
     Q: OutgoingQueue,
     B: AsMut<[u8]>,
     M: EncodeMessage,
 {
-    let next_serial = serial.current();
     let len = message.encode_message(buf.as_mut())?;
     let message = buf
         .as_mut()
         .get_mut(..len)
         .ok_or(DBusError::InternalError)?;
-    queue.push(message, next_serial)?;
-    serial.advance();
-    Ok(next_serial)
+    queue.push(message)
 }
 
 struct PollDBus {
@@ -204,15 +205,13 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = PollDBus::new()?;
-    let mut serial = DBusSerial::new();
     let primary_connection_path_buf = [0; 512];
     let primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = vec![];
     {
         let mut buf = Hello::ENCODED;
-        queue.push(&mut buf, serial.current())?;
-        serial.advance();
+        queue.push(&mut buf)?;
     }
 
     let mut primary_connection_path_reply_serial = 0;
@@ -222,7 +221,6 @@ fn main() -> Result<()> {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
                 primary_connection_path_reply_serial = enqueue_get_property(
-                    &mut serial,
                     &mut queue,
                     primary_connection_path_buf,
                     "org.freedesktop.NetworkManager",
@@ -247,7 +245,6 @@ fn main() -> Result<()> {
                         log::info!("Primary connection: {primary_connection}");
 
                         primary_connection_id_reply_serial = enqueue_get_property(
-                            &mut serial,
                             &mut queue,
                             primary_connection_id_buf,
                             "org.freedesktop.NetworkManager",
@@ -277,7 +274,6 @@ fn main() -> Result<()> {
 }
 
 fn enqueue_get_property(
-    serial: &mut DBusSerial,
     queue: &mut ExampleQueue,
     buf: [u8; 512],
     destination: &str,
@@ -286,7 +282,6 @@ fn enqueue_get_property(
     property: &str,
 ) -> Result<u32> {
     encode_and_queue(
-        serial,
         queue,
         buf,
         &GetProperty::new(destination, path, interface, property),
