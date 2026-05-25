@@ -35,11 +35,11 @@ impl OutgoingQueue for ExampleQueue {
         Ok(serial)
     }
 
-    fn front(&self) -> Option<&[u8]> {
+    fn peek(&self) -> Option<&[u8]> {
         self.messages.front().map(Vec::as_slice)
     }
 
-    fn pop_front(&mut self) {
+    fn pop(&mut self) {
         self.messages.pop_front();
     }
 }

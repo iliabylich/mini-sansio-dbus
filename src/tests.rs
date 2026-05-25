@@ -1,7 +1,6 @@
 use crate::{
-    DBusError, EncodeError, EncodeMessage, IncomingMessage, IncomingValue, MessageType,
-    SliceMessageEncoder, dbus_body, dbus_body_fragment,
-    messages::org_freedesktop_dbus::SetProperty,
+    DBusError, EncodeError, IncomingMessage, IncomingValue, MessageType, SliceMessageEncoder,
+    dbus_body, dbus_body_fragment, messages::org_freedesktop_dbus::SetProperty,
 };
 
 const MESSAGE_BLOB: &[u8] = &[
@@ -217,21 +216,20 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
 
 #[test]
 fn set_property_encodes_string_variant() -> Result<(), DBusError> {
-    let message = SetProperty::new(
+    let mut buf = vec![0; 512];
+    let len = SetProperty::encode(
+        &mut buf,
         "org.example.Service",
         "/org/example/Object",
         "org.example.Interface",
         "Name",
-        16,
         |encoder: &mut SliceMessageEncoder<'_>| {
             dbus_body_fragment!(encoder, {
                 variant<str>("online"),
             });
             Ok(())
         },
-    );
-    let mut buf = vec![0; message.encoded_capacity()];
-    let len = message.encode_message(&mut buf)?;
+    )?;
     let decoded = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
@@ -265,22 +263,21 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
 
 #[test]
 fn set_property_encodes_array_variant() -> Result<(), DBusError> {
+    let mut buf = vec![0; 512];
     let values = [1u32, 2, 3];
-    let message = SetProperty::new(
+    let len = SetProperty::encode(
+        &mut buf,
         "org.example.Service",
         "/org/example/Object",
         "org.example.Interface",
         "Values",
-        16,
         |encoder: &mut SliceMessageEncoder<'_>| {
             dbus_body_fragment!(encoder, {
                 variant<array<u32>> [values[0], values[1], values[2]],
             });
             Ok(())
         },
-    );
-    let mut buf = vec![0; message.encoded_capacity()];
-    let len = message.encode_message(&mut buf)?;
+    )?;
     let decoded = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
     assert_eq!(decoded.signature, Some("ssv"));

@@ -40,7 +40,7 @@ pub use introspectible_object_at::{IntrospectibleObjectAt, IntrospectibleObjectA
 pub mod messages;
 pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
 pub use error::DBusError;
-pub use sansio::{DBusConnection, DBusSerial, EncodeMessage, OutgoingQueue};
+pub use sansio::{DBusConnection, DBusSerial, OutgoingQueue};
 pub use satisfy::DBusSatisfy;
 pub use types::MessageType;
 pub use wants::DBusWants;

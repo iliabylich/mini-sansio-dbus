@@ -1,18 +1,5 @@
 use crate::{DBusError, EncodeError};
 
-/// A message that can encode itself into a caller-provided byte slice.
-pub trait EncodeMessage {
-    /// Returns the buffer size this message needs for encoding.
-    fn encoded_capacity(&self) -> usize;
-
-    /// Encodes this message without assigning a serial.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the provided buffer cannot fit the encoded message.
-    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError>;
-}
-
 /// Allocates outgoing D-Bus message serials.
 #[derive(Debug, Clone, Copy)]
 #[must_use]
@@ -71,8 +58,8 @@ pub trait OutgoingQueue {
     fn push(&mut self, message: &mut [u8]) -> Result<u32, DBusError>;
 
     /// Returns the first queued message.
-    fn front(&self) -> Option<&[u8]>;
+    fn peek(&self) -> Option<&[u8]>;
 
     /// Removes the first queued message.
-    fn pop_front(&mut self);
+    fn pop(&mut self);
 }

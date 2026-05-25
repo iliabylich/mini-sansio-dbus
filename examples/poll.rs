@@ -1,7 +1,7 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusSerial, DBusWants, EncodeMessage, IncomingMessage,
-    IncomingValue, MessageType, OutgoingQueue,
+    DBusConnection, DBusError, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
+    OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
     value_is,
 };
@@ -43,27 +43,13 @@ impl OutgoingQueue for ExampleQueue {
         Ok(serial)
     }
 
-    fn front(&self) -> Option<&[u8]> {
+    fn peek(&self) -> Option<&[u8]> {
         self.messages.front().map(Vec::as_slice)
     }
 
-    fn pop_front(&mut self) {
+    fn pop(&mut self) {
         self.messages.pop_front();
     }
-}
-
-fn encode_and_queue<Q, B, M>(queue: &mut Q, mut buf: B, message: &M) -> Result<u32, DBusError>
-where
-    Q: OutgoingQueue,
-    B: AsMut<[u8]>,
-    M: EncodeMessage,
-{
-    let len = message.encode_message(buf.as_mut())?;
-    let message = buf
-        .as_mut()
-        .get_mut(..len)
-        .ok_or(DBusError::InternalError)?;
-    queue.push(message)
 }
 
 struct PollDBus {
@@ -210,8 +196,8 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = PollDBus::new()?;
-    let primary_connection_path_buf = [0; 512];
-    let primary_connection_id_buf = [0; 512];
+    let mut primary_connection_path_buf = [0; 512];
+    let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = vec![];
     {
@@ -227,7 +213,7 @@ fn main() -> Result<()> {
             ProcessResult::Connected => {
                 primary_connection_path_reply_serial = enqueue_get_property(
                     &mut queue,
-                    primary_connection_path_buf,
+                    &mut primary_connection_path_buf,
                     "org.freedesktop.NetworkManager",
                     "/org/freedesktop/NetworkManager",
                     "org.freedesktop.NetworkManager",
@@ -251,7 +237,7 @@ fn main() -> Result<()> {
 
                         primary_connection_id_reply_serial = enqueue_get_property(
                             &mut queue,
-                            primary_connection_id_buf,
+                            &mut primary_connection_id_buf,
                             "org.freedesktop.NetworkManager",
                             primary_connection,
                             "org.freedesktop.NetworkManager.Connection.Active",
@@ -280,18 +266,16 @@ fn main() -> Result<()> {
 
 fn enqueue_get_property(
     queue: &mut ExampleQueue,
-    buf: [u8; 512],
+    buf: &mut [u8],
     destination: &str,
     path: &str,
     interface: &str,
     property: &str,
 ) -> Result<u32> {
-    encode_and_queue(
-        queue,
-        buf,
-        &GetProperty::new(destination, path, interface, property),
-    )
-    .map_err(Into::into)
+    let len = GetProperty::encode(buf, destination, path, interface, property)?;
+    let buf = buf.as_mut().get_mut(..len).context("malformed buffer")?;
+    let serial = queue.push(buf)?;
+    Ok(serial)
 }
 
 fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {

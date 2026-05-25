@@ -1,49 +1,29 @@
-use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, const_helpers::try_, dbus_body};
 
 /// Represents a request to get a single property of `DBus` object
-pub struct GetProperty<'a> {
-    destination: &'a str,
-    path: &'a str,
-    interface: &'a str,
-    property: &'a str,
-}
+pub struct GetProperty;
 
-impl<'a> GetProperty<'a> {
-    /// Constructor for the slice-encoded message.
-    #[must_use]
-    pub const fn new(
-        destination: &'a str,
-        path: &'a str,
-        interface: &'a str,
-        property: &'a str,
-    ) -> Self {
-        Self {
-            destination,
-            path,
-            interface,
-            property,
-        }
-    }
-}
-
-impl EncodeMessage for GetProperty<'_> {
-    fn encoded_capacity(&self) -> usize {
-        256usize
-            .saturating_add(self.destination.len())
-            .saturating_add(self.path.len())
-            .saturating_add(self.interface.len())
-            .saturating_add(self.property.len())
-    }
-
-    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, 0)?;
-        encoder.set_path(self.path)?;
-        encoder.set_member("Get")?;
-        encoder.set_interface("org.freedesktop.DBus.Properties")?;
-        encoder.set_destination(self.destination)?;
+impl GetProperty {
+    /// Writes a "get" message to a given buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if message doesn't fit into given buffer.
+    pub const fn encode(
+        buf: &mut [u8],
+        destination: &str,
+        path: &str,
+        interface: &str,
+        property: &str,
+    ) -> Result<usize, EncodeError> {
+        let mut encoder = try_!(SliceMessageEncoder::new(buf, MessageType::MethodCall, 0));
+        try_!(encoder.set_path(path));
+        try_!(encoder.set_member("Get"));
+        try_!(encoder.set_interface("org.freedesktop.DBus.Properties"));
+        try_!(encoder.set_destination(destination));
         dbus_body!(encoder, {
-            str(self.interface),
-            str(self.property),
+            str(interface),
+            str(property),
         });
         encoder.finish()
     }

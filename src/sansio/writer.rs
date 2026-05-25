@@ -28,7 +28,7 @@ impl DBusWriter {
     {
         match self.state {
             State::Writing { bytes_written } => {
-                let buf = queue.front()?;
+                let buf = queue.peek()?;
                 let remainder = buf.get(bytes_written..)?;
                 Some(DBusWants::Write {
                     buf: remainder,
@@ -45,7 +45,7 @@ impl DBusWriter {
     {
         match &mut self.state {
             State::Writing { bytes_written } => {
-                let buf = queue.front().ok_or(DBusError::InternalError)?;
+                let buf = queue.peek().ok_or(DBusError::InternalError)?;
 
                 *bytes_written = bytes_written
                     .checked_add(len)
@@ -54,7 +54,7 @@ impl DBusWriter {
 
                 if *bytes_written == buf.len() {
                     *bytes_written = 0;
-                    queue.pop_front();
+                    queue.pop();
                 }
             }
             State::Dead => {}
