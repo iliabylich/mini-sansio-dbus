@@ -12,7 +12,7 @@ use rustix::net::{AddressFamily, SocketAddrUnix, SocketType};
 /// conn.satisfy(Satisfy::<OneThatMatchesWants>);
 /// ```
 #[derive(Debug)]
-pub enum DBusWants<'readbuf, 'writebuf> {
+pub enum DBusWants<'r, 'w> {
     /// A `socket()` opertion
     Socket {
         /// `domain` argument of the `socket()` call
@@ -32,14 +32,14 @@ pub enum DBusWants<'readbuf, 'writebuf> {
     /// A `read()` opertion
     Read {
         /// `buf` argument of the `read()` call
-        buf: &'readbuf mut [u8],
+        buf: &'r mut [u8],
         /// sequence number of a request
         seq: u64,
     },
     /// A `write()` opertion
     Write {
         /// `buf` argument of the `write()` call
-        buf: &'writebuf [u8],
+        buf: &'w [u8],
         /// sequence number of a request
         ///
         seq: u64,
@@ -47,11 +47,11 @@ pub enum DBusWants<'readbuf, 'writebuf> {
     /// A combination of `read()` +  `write()` opertions
     ReadWrite {
         /// `buf` argument of the `read()` call
-        readbuf: &'readbuf mut [u8],
+        readbuf: &'r mut [u8],
         /// sequence number of the `read()` call
         readseq: u64,
         /// `buf` argument of the `write()` call
-        writebuf: &'writebuf [u8],
+        writebuf: &'w [u8],
         /// sequence number of the `write()` call
         writeseq: u64,
     },

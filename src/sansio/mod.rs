@@ -68,11 +68,11 @@ impl DBusConnection {
     /// Returns what connection wants at the moment
     ///
     /// Returned value must be parsed and converted to a syscall of some sort
-    pub fn wants<'readbuf, 'writebuf, Q>(
+    pub fn wants<'r, 'w, Q>(
         &mut self,
-        queue: &'writebuf Q,
-        readbuf: &'readbuf mut Vec<u8>,
-    ) -> Option<DBusWants<'readbuf, 'writebuf>>
+        queue: &'w Q,
+        readbuf: &'r mut Vec<u8>,
+    ) -> Option<DBusWants<'r, 'w>>
     where
         Q: OutgoingQueue,
     {
@@ -138,11 +138,11 @@ impl DBusConnection {
     /// # Errors
     ///
     /// Fails is operation is not the one that was last returned from `wants`
-    pub fn satisfy_read<'readbuf>(
+    pub fn satisfy_read<'r>(
         &mut self,
         len: usize,
-        readbuf: &'readbuf [u8],
-    ) -> Result<Option<IncomingMessage<'readbuf>>, DBusError> {
+        readbuf: &'r [u8],
+    ) -> Result<Option<IncomingMessage<'r>>, DBusError> {
         match &mut self.state {
             State::Connecting(connector) => {
                 connector.satisfy_read(len, readbuf)?;

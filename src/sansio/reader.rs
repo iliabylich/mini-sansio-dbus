@@ -27,10 +27,7 @@ impl DBusReader {
         }
     }
 
-    pub(crate) fn wants<'readbuf>(
-        &self,
-        buf: &'readbuf mut Vec<u8>,
-    ) -> Option<DBusWants<'readbuf, 'static>> {
+    pub(crate) fn wants<'r>(&self, buf: &'r mut Vec<u8>) -> Option<DBusWants<'r, 'static>> {
         match self.state {
             State::ReadHeader { bytes_read } => {
                 buf.resize(HEADER_LEN, 0);

@@ -19,10 +19,7 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn wants<'writebuf, Q>(
-        &self,
-        queue: &'writebuf Q,
-    ) -> Option<DBusWants<'static, 'writebuf>>
+    pub(crate) fn wants<'w, Q>(&self, queue: &'w Q) -> Option<DBusWants<'static, 'w>>
     where
         Q: OutgoingQueue,
     {

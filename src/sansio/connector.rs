@@ -44,10 +44,7 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn wants<'readbuf>(
-        &self,
-        buf: &'readbuf mut Vec<u8>,
-    ) -> Option<DBusWants<'readbuf, 'static>> {
+    pub(crate) fn wants<'r>(&self, buf: &'r mut Vec<u8>) -> Option<DBusWants<'r, 'static>> {
         match self.state {
             State::Socket => Some(DBusWants::Socket {
                 domain: AddressFamily::UNIX,
