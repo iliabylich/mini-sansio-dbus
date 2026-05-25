@@ -27,10 +27,9 @@ impl DBusReader {
         }
     }
 
-    pub(crate) fn wants<'r>(&self, buf: &'r mut Vec<u8>) -> Option<DBusWants<'r, 'static>> {
+    pub(crate) fn wants<'r>(&self, buf: &'r mut [u8]) -> Option<DBusWants<'r, 'static>> {
         match self.state {
             State::ReadHeader { bytes_read } => {
-                buf.resize(HEADER_LEN, 0);
                 let remainder = buf.get_mut(bytes_read..HEADER_LEN)?;
                 Some(DBusWants::Read {
                     buf: remainder,
@@ -42,7 +41,6 @@ impl DBusReader {
                 bytes_read,
                 message_len,
             } => {
-                buf.resize(message_len, 0);
                 let remainder = buf.get_mut(bytes_read..message_len)?;
                 Some(DBusWants::Read {
                     buf: remainder,

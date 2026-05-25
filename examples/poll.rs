@@ -73,7 +73,7 @@ impl PollDBus {
     fn process_until_blocked_or_message_received<'a>(
         &'a mut self,
         queue: &mut ExampleQueue,
-        readerbuf: &'a mut Vec<u8>,
+        readerbuf: &'a mut [u8],
     ) -> Result<ProcessResult<'a>> {
         loop {
             let wants = self
@@ -199,7 +199,7 @@ fn main() -> Result<()> {
     let mut primary_connection_path_buf = [0; 512];
     let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
-    let mut readerbuf = vec![];
+    let mut readerbuf = [0; 1_024];
     {
         let mut buf = Hello::ENCODED;
         queue.push(&mut buf)?;

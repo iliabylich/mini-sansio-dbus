@@ -44,7 +44,7 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn wants<'r>(&self, buf: &'r mut Vec<u8>) -> Option<DBusWants<'r, 'static>> {
+    pub(crate) fn wants<'r>(&self, buf: &'r mut [u8]) -> Option<DBusWants<'r, 'static>> {
         match self.state {
             State::Socket => Some(DBusWants::Socket {
                 domain: AddressFamily::UNIX,
@@ -71,8 +71,7 @@ impl DBusConnector {
             }
 
             State::ReadData { bytes_read } => {
-                let remaning = DATA.len().checked_sub(bytes_read)?;
-                *buf = vec![0; remaning];
+                let buf = &mut buf[bytes_read..DATA.len()];
                 Some(DBusWants::Read { buf, seq: self.seq })
             }
 
@@ -85,8 +84,7 @@ impl DBusConnector {
             }
 
             State::ReadGUID { bytes_read } => {
-                let remaning = GUID_LENGTH.checked_sub(bytes_read)?;
-                *buf = vec![0; remaning];
+                let buf = &mut buf[bytes_read..GUID_LENGTH];
                 Some(DBusWants::Read { buf, seq: self.seq })
             }
 

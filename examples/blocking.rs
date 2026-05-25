@@ -59,7 +59,7 @@ impl BlockingDBus {
         Ok(Self { conn, fd: None })
     }
 
-    fn socket(&mut self, queue: &ExampleQueue, readerbuf: &mut Vec<u8>) -> Result<()> {
+    fn socket(&mut self, queue: &ExampleQueue, readerbuf: &mut [u8]) -> Result<()> {
         log::info!("Getting a socket...");
         let wants = self
             .conn
@@ -77,7 +77,7 @@ impl BlockingDBus {
         Ok(())
     }
 
-    fn connect(&mut self, queue: &ExampleQueue, readerbuf: &mut Vec<u8>) -> Result<()> {
+    fn connect(&mut self, queue: &ExampleQueue, readerbuf: &mut [u8]) -> Result<()> {
         log::info!("Connecting...");
         let wants = self
             .conn
@@ -97,7 +97,7 @@ impl BlockingDBus {
     fn read_write<'a>(
         &mut self,
         queue: &mut ExampleQueue,
-        readerbuf: &'a mut Vec<u8>,
+        readerbuf: &'a mut [u8],
     ) -> Result<Option<IncomingMessage<'a>>> {
         let wants = self.conn.wants(queue, readerbuf).context("wants nothing")?;
         log::info!("<< {wants:?}");
@@ -133,7 +133,7 @@ fn main() -> Result<()> {
 
     let mut dbus = BlockingDBus::new()?;
     let mut queue = ExampleQueue::new();
-    let mut readerbuf = vec![];
+    let mut readerbuf = [0; 1_024];
     {
         let mut buf = const { Hello::ENCODED };
         queue.push(&mut buf)?;

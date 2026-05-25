@@ -71,7 +71,7 @@ impl DBusConnection {
     pub fn wants<'r, 'w, Q>(
         &mut self,
         queue: &'w Q,
-        readbuf: &'r mut Vec<u8>,
+        readbuf: &'r mut [u8],
     ) -> Option<DBusWants<'r, 'w>>
     where
         Q: OutgoingQueue,
