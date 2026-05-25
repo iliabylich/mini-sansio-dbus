@@ -1,7 +1,6 @@
 use crate::{
-    Array, DBusError, DictEntry, IncomingValue, MessageType, ObjectPath, OutgoingCompleteType,
-    OutgoingMessage, OutgoingValue, Signature, SliceMessageEncoder, Str, Struct2, UnixFd, Variant,
-    outgoing::MessageEncoder,
+    Array, DBusError, DictEntry, IncomingValue, MessageType, ObjectPath, Signature,
+    SliceMessageEncoder, Str, Struct2, UnixFd, Variant,
 };
 
 const MESSAGE_BLOB: &[u8] = &[
@@ -21,50 +20,6 @@ const MESSAGE_BLOB: &[u8] = &[
     0, 0, 4, 0, 0, 0, 7, 0, 8, 0, 8, 0, 0, 0, 100, 105, 99, 116, 45, 107, 101, 121, 0, 0, 0, 0, 99,
     0, 0, 0, 1, 105, 0, 0, 247, 255, 255, 255,
 ];
-
-fn message_with_known_value_types() -> OutgoingMessage {
-    OutgoingMessage::MethodCall {
-        destination: Some(String::from("org.example.Service")),
-        path: String::from("/org/example/Object"),
-        interface: Some(String::from("org.example.Interface")),
-        serial: 42,
-        member: String::from("AllTypes"),
-        sender: Some(String::from(":1.100")),
-        unix_fds: Some(1),
-        body: vec![
-            OutgoingValue::Byte(0x2a),
-            OutgoingValue::Bool(true),
-            OutgoingValue::Int16(-1234),
-            OutgoingValue::UInt16(1234),
-            OutgoingValue::Int32(-123_456),
-            OutgoingValue::UInt32(123_456),
-            OutgoingValue::Int64(-123_456_789),
-            OutgoingValue::UInt64(123_456_789),
-            OutgoingValue::Double(12.5),
-            OutgoingValue::UnixFD(0),
-            OutgoingValue::String(String::from("hello")),
-            OutgoingValue::ObjectPath(String::from("/org/example/Value")),
-            OutgoingValue::Signature(b"su".to_vec()),
-            OutgoingValue::Struct(vec![
-                OutgoingValue::String(String::from("inside-struct")),
-                OutgoingValue::UInt32(77),
-            ]),
-            OutgoingValue::Array(
-                OutgoingCompleteType::UInt16,
-                vec![OutgoingValue::UInt16(7), OutgoingValue::UInt16(8)],
-            ),
-            OutgoingValue::DictEntry(
-                Box::new(OutgoingValue::String(String::from("dict-key"))),
-                Box::new(OutgoingValue::UInt32(99)),
-            ),
-            OutgoingValue::Variant(Box::new(OutgoingValue::Int32(-9))),
-        ],
-    }
-}
-
-fn encoded_message_blob() -> Vec<u8> {
-    MESSAGE_BLOB.to_vec()
-}
 
 #[test]
 fn slice_encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::EncodeError> {
@@ -120,16 +75,8 @@ fn slice_encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crat
 }
 
 #[test]
-fn encodes_message_to_expected_in_memory_blob() {
-    let encoded = MessageEncoder::encode(&message_with_known_value_types());
-
-    assert_eq!(encoded, encoded_message_blob());
-}
-
-#[test]
 fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
-    let encoded = encoded_message_blob();
-    let decoded = crate::IncomingMessage::new(&encoded)?;
+    let decoded = crate::IncomingMessage::new(MESSAGE_BLOB)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
     assert_eq!(decoded.serial, 42);
