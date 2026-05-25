@@ -205,12 +205,15 @@ fn main() -> Result<()> {
 
     let mut dbus = PollDBus::new()?;
     let mut serial = DBusSerial::new();
-    let hello_buf = [0; 512];
     let primary_connection_path_buf = [0; 512];
     let primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = vec![];
-    encode_and_queue(&mut serial, &mut queue, hello_buf, &Hello)?;
+    {
+        let mut buf = Hello::ENCODED;
+        queue.push(&mut buf, serial.current())?;
+        serial.advance();
+    }
 
     let mut primary_connection_path_reply_serial = 0;
     let mut primary_connection_id_reply_serial = 0;

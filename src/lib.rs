@@ -1,5 +1,5 @@
 // #![no_std]
-// #![forbid(unsafe_code)]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 #![warn(trivial_casts)]
