@@ -4,7 +4,7 @@ use reader::DBusReader;
 use rustix::net::SocketAddrUnix;
 use writer::DBusWriter;
 
-pub use queue::{DBusSerial, EncodeMessage, EncodedMessage, OutgoingQueue};
+pub use queue::{DBusSerial, EncodeMessage, OutgoingQueue};
 
 mod connector;
 mod queue;

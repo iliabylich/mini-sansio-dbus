@@ -44,7 +44,7 @@ pub use encoder::{
 };
 pub use error::DBusError;
 pub use requests::{IncompleteMethodCall, MethodCall, Subscription};
-pub use sansio::{DBusConnection, DBusSerial, EncodeMessage, EncodedMessage, OutgoingQueue};
+pub use sansio::{DBusConnection, DBusSerial, EncodeMessage, OutgoingQueue};
 pub use satisfy::DBusSatisfy;
 pub use types::MessageType;
 pub use wants::DBusWants;

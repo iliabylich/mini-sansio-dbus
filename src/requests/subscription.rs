@@ -1,5 +1,5 @@
 use crate::{
-    DBusError, DBusSerial, EncodedMessage, IncomingBody, IncomingMessage, interface_is,
+    DBusError, DBusSerial, IncomingBody, IncomingMessage, interface_is,
     messages::org_freedesktop_dbus::{AddMatch, RemoveMatch},
     sansio::OutgoingQueue,
     types::MessageType,
@@ -31,8 +31,8 @@ impl<T> Subscription<T> {
         buf: B,
     ) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<Message = EncodedMessage<B>>,
-        B: AsMut<[u8]> + AsRef<[u8]>,
+        Q: OutgoingQueue,
+        B: AsMut<[u8]>,
     {
         let SubscriptionState::Subscribed(path) = core::mem::take(&mut self.state) else {
             return Ok(());
@@ -54,8 +54,8 @@ impl<T> Subscription<T> {
         buf: B,
     ) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<Message = EncodedMessage<B>>,
-        B: AsMut<[u8]> + AsRef<[u8]>,
+        Q: OutgoingQueue,
+        B: AsMut<[u8]>,
     {
         let rule = format!(
             "type='signal',sender='{sender}',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='{path}'",
@@ -80,8 +80,8 @@ impl<T> Subscription<T> {
         subscribe_buf: B,
     ) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<Message = EncodedMessage<B>>,
-        B: AsMut<[u8]> + AsRef<[u8]>,
+        Q: OutgoingQueue,
+        B: AsMut<[u8]>,
     {
         self.unsubscribe(serial, queue, unsubscribe_buf)?;
         self.subscribe(sender.as_ref(), path.into(), serial, queue, subscribe_buf)
@@ -99,8 +99,8 @@ impl<T> Subscription<T> {
         buf: B,
     ) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<Message = EncodedMessage<B>>,
-        B: AsMut<[u8]> + AsRef<[u8]>,
+        Q: OutgoingQueue,
+        B: AsMut<[u8]>,
     {
         self.unsubscribe(serial, queue, buf)
     }
@@ -160,17 +160,17 @@ fn encode_and_queue<Q, B, M>(
     message: &M,
 ) -> Result<u32, DBusError>
 where
-    Q: OutgoingQueue<Message = EncodedMessage<B>>,
-    B: AsMut<[u8]> + AsRef<[u8]>,
+    Q: OutgoingQueue,
+    B: AsMut<[u8]>,
     M: crate::EncodeMessage,
 {
     let next_serial = serial.current();
     let len = message.encode_message(buf.as_mut())?;
-    let mut message = EncodedMessage::new(buf, len)?;
-    message.set_serial(next_serial)?;
-    queue
-        .push(message)
-        .map_err(|_| DBusError::OutgoingQueueRejected)?;
+    let message = buf
+        .as_mut()
+        .get_mut(..len)
+        .ok_or(DBusError::InternalError)?;
+    queue.push(message, next_serial)?;
     serial.advance();
     Ok(next_serial)
 }

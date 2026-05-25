@@ -54,7 +54,7 @@ impl DBusWriter {
 
                 if *bytes_written == buf.len() {
                     *bytes_written = 0;
-                    let _ = queue.pop_front();
+                    queue.pop_front();
                 }
             }
             State::Dead => {}

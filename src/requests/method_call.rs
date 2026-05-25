@@ -1,5 +1,5 @@
 use crate::{
-    DBusError, DBusSerial, EncodeError, EncodedMessage, IncomingBody, IncomingMessage, MessageType,
+    DBusError, DBusSerial, EncodeError, IncomingBody, IncomingMessage, MessageType,
     sansio::OutgoingQueue,
 };
 use core::marker::PhantomData;
@@ -90,8 +90,8 @@ where
         mut buf: B,
     ) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<Message = EncodedMessage<B>>,
-        B: AsMut<[u8]> + AsRef<[u8]>,
+        Q: OutgoingQueue,
+        B: AsMut<[u8]>,
     {
         if !matches!(self.state, OneshotState::None) {
             return Ok(());
@@ -99,11 +99,11 @@ where
 
         let reply_serial = serial.current();
         let len = (self.send)(input, self.data.clone(), buf.as_mut())?;
-        let mut message = EncodedMessage::new(buf, len)?;
-        message.set_serial(reply_serial)?;
-        queue
-            .push(message)
-            .map_err(|_| DBusError::OutgoingQueueRejected)?;
+        let message = buf
+            .as_mut()
+            .get_mut(..len)
+            .ok_or(DBusError::InternalError)?;
+        queue.push(message, reply_serial)?;
         serial.advance();
         self.state = OneshotState::WaitingForReply(reply_serial);
         Ok(())

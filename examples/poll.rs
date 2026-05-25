@@ -1,7 +1,7 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusSerial, DBusWants, EncodeMessage, EncodedMessage,
-    IncomingMessage, IncomingValue, MessageType, OutgoingQueue,
+    DBusConnection, DBusError, DBusSerial, DBusWants, EncodeMessage, IncomingMessage,
+    IncomingValue, MessageType, OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
     value_is,
 };
@@ -15,11 +15,11 @@ use std::{
 };
 
 #[derive(Debug, Default)]
-struct ExampleQueue<M> {
-    messages: VecDeque<M>,
+struct ExampleQueue {
+    messages: VecDeque<Vec<u8>>,
 }
 
-impl<M> ExampleQueue<M> {
+impl ExampleQueue {
     fn new() -> Self {
         Self {
             messages: VecDeque::new(),
@@ -27,21 +27,19 @@ impl<M> ExampleQueue<M> {
     }
 }
 
-impl<M: AsRef<[u8]>> OutgoingQueue for ExampleQueue<M> {
-    type Message = M;
-    type Error = core::convert::Infallible;
-
-    fn push(&mut self, message: Self::Message) -> Result<(), Self::Error> {
-        self.messages.push_back(message);
+impl OutgoingQueue for ExampleQueue {
+    fn push(&mut self, message: &mut [u8], serial: u32) -> Result<(), DBusError> {
+        DBusSerial::write_to_message(message, serial)?;
+        self.messages.push_back(message.to_vec());
         Ok(())
     }
 
     fn front(&self) -> Option<&[u8]> {
-        self.messages.front().map(AsRef::as_ref)
+        self.messages.front().map(Vec::as_slice)
     }
 
-    fn pop_front(&mut self) -> Option<Self::Message> {
-        self.messages.pop_front()
+    fn pop_front(&mut self) {
+        self.messages.pop_front();
     }
 }
 
@@ -52,17 +50,17 @@ fn encode_and_queue<Q, B, M>(
     message: &M,
 ) -> Result<u32, DBusError>
 where
-    Q: OutgoingQueue<Message = EncodedMessage<B>>,
-    B: AsMut<[u8]> + AsRef<[u8]>,
+    Q: OutgoingQueue,
+    B: AsMut<[u8]>,
     M: EncodeMessage,
 {
     let next_serial = serial.current();
     let len = message.encode_message(buf.as_mut())?;
-    let mut message = EncodedMessage::new(buf, len)?;
-    message.set_serial(next_serial)?;
-    queue
-        .push(message)
-        .map_err(|_| DBusError::OutgoingQueueRejected)?;
+    let message = buf
+        .as_mut()
+        .get_mut(..len)
+        .ok_or(DBusError::InternalError)?;
+    queue.push(message, next_serial)?;
     serial.advance();
     Ok(next_serial)
 }
@@ -82,7 +80,7 @@ impl PollDBus {
 
     fn process_until_blocked_or_message_received<'a>(
         &'a mut self,
-        queue: &mut ExampleQueue<EncodedMessage<[u8; 512]>>,
+        queue: &mut ExampleQueue,
         readerbuf: &'a mut Vec<u8>,
     ) -> Result<ProcessResult<'a>> {
         loop {
@@ -210,7 +208,7 @@ fn main() -> Result<()> {
     let hello_buf = [0; 512];
     let primary_connection_path_buf = [0; 512];
     let primary_connection_id_buf = [0; 512];
-    let mut queue = ExampleQueue::<EncodedMessage<[u8; 512]>>::new();
+    let mut queue = ExampleQueue::new();
     let mut readerbuf = vec![];
     encode_and_queue(&mut serial, &mut queue, hello_buf, &Hello)?;
 
@@ -277,7 +275,7 @@ fn main() -> Result<()> {
 
 fn enqueue_get_property(
     serial: &mut DBusSerial,
-    queue: &mut ExampleQueue<EncodedMessage<[u8; 512]>>,
+    queue: &mut ExampleQueue,
     buf: [u8; 512],
     destination: &str,
     path: &str,
