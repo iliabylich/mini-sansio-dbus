@@ -66,16 +66,28 @@ impl<'buf> SliceCursor<'buf> {
         if end > u32::MAX as usize {
             return Err(EncodeError::ContainerTooLong);
         }
-        self.buf[self.pos..end].copy_from_slice(bytes);
+        let dst = self
+            .buf
+            .get_mut(self.pos..end)
+            .ok_or(EncodeError::BufferTooSmall)?;
+        dst.copy_from_slice(bytes);
         self.pos = end;
         Ok(())
     }
 
-    pub(crate) fn set_u32(&mut self, at: usize, value: u32) {
-        self.buf[at..at + 4].copy_from_slice(&value.to_le_bytes());
+    pub(crate) fn set_u32(&mut self, at: usize, value: u32) -> EncodeResult<()> {
+        let end = at.checked_add(4).ok_or(EncodeError::ContainerTooLong)?;
+        let slot = self
+            .buf
+            .get_mut(at..end)
+            .ok_or(EncodeError::BufferTooSmall)?;
+        slot.copy_from_slice(&value.to_le_bytes());
+        Ok(())
     }
 
-    pub(crate) fn set_u8(&mut self, at: usize, value: u8) {
-        self.buf[at] = value;
+    pub(crate) fn set_u8(&mut self, at: usize, value: u8) -> EncodeResult<()> {
+        let slot = self.buf.get_mut(at).ok_or(EncodeError::BufferTooSmall)?;
+        *slot = value;
+        Ok(())
     }
 }

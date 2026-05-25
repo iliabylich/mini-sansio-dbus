@@ -29,7 +29,7 @@ impl DBusWriter {
         match self.state {
             State::Writing { bytes_written } => {
                 let buf = queue.front()?;
-                let remainder = &buf[bytes_written..];
+                let remainder = buf.get(bytes_written..)?;
                 Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
@@ -47,8 +47,10 @@ impl DBusWriter {
             State::Writing { bytes_written } => {
                 let buf = queue.front().ok_or(DBusError::InternalError)?;
 
-                *bytes_written += len;
-                self.seq += 1;
+                *bytes_written = bytes_written
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
                 if *bytes_written == buf.len() {
                     *bytes_written = 0;

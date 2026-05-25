@@ -25,16 +25,25 @@ impl<'a> Cursor<'a> {
     }
 
     pub(crate) fn align(&mut self, alignment: usize) -> Result<(), DBusError> {
-        let pad = (alignment - (self.offset % alignment)) % alignment;
+        if alignment == 0 {
+            return Err(DBusError::ParseError);
+        }
+        let next_offset = self
+            .offset
+            .checked_next_multiple_of(alignment)
+            .ok_or(DBusError::ParseError)?;
+        let pad = next_offset
+            .checked_sub(self.offset)
+            .ok_or(DBusError::ParseError)?;
         self.buf = self.buf.get(pad..).ok_or(DBusError::ParseError)?;
-        self.offset += pad;
+        self.offset = next_offset;
         Ok(())
     }
 
     pub(crate) fn take(&mut self, n: usize) -> Result<&'a [u8], DBusError> {
         let (head, tail) = self.buf.split_at_checked(n).ok_or(DBusError::ParseError)?;
         self.buf = tail;
-        self.offset += n;
+        self.offset = self.offset.checked_add(n).ok_or(DBusError::ParseError)?;
         Ok(head)
     }
 

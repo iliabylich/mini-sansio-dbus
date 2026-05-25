@@ -70,23 +70,29 @@ impl<'slot, 'buf, T> ArraySlot<'slot, 'buf, T> {
     }
 
     /// Explicitly finalizes the array length field.
-    pub fn finish(&mut self) {
-        self.finalize();
+    pub fn finish(&mut self) -> EncodeResult<()> {
+        self.finalize()
     }
 
-    fn finalize(&mut self) {
+    fn finalize(&mut self) -> EncodeResult<()> {
         if self.finalized {
-            return;
+            return Ok(());
         }
-        let byte_len = self.cur.pos() - self.data_start;
-        self.cur.set_u32(self.len_pos, byte_len as u32);
+        let byte_len = self
+            .cur
+            .pos()
+            .checked_sub(self.data_start)
+            .ok_or(EncodeError::ContainerTooLong)?;
+        let byte_len = u32::try_from(byte_len).map_err(|_| EncodeError::ContainerTooLong)?;
+        self.cur.set_u32(self.len_pos, byte_len)?;
         self.finalized = true;
+        Ok(())
     }
 }
 
 impl<T> Drop for ArraySlot<'_, '_, T> {
     fn drop(&mut self) {
-        self.finalize();
+        let _ = self.finalize();
     }
 }
 
@@ -129,7 +135,10 @@ impl<'slot, 'buf, A, B> Struct2Slot<'slot, 'buf, A, B> {
         if self.next_field != expected {
             return Err(EncodeError::TypeMismatch);
         }
-        self.next_field += 1;
+        self.next_field = self
+            .next_field
+            .checked_add(1)
+            .ok_or(EncodeError::TypeMismatch)?;
         Ok(())
     }
 }
@@ -173,7 +182,10 @@ impl<'slot, 'buf, K, V> DictEntrySlot<'slot, 'buf, K, V> {
         if self.next_field != expected {
             return Err(EncodeError::TypeMismatch);
         }
-        self.next_field += 1;
+        self.next_field = self
+            .next_field
+            .checked_add(1)
+            .ok_or(EncodeError::TypeMismatch)?;
         Ok(())
     }
 }

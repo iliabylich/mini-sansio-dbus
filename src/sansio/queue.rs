@@ -52,10 +52,17 @@ pub struct EncodedMessage<B> {
     len: usize,
 }
 
-impl<B> EncodedMessage<B> {
+impl<B: AsRef<[u8]>> EncodedMessage<B> {
     /// Constructs an encoded message from a buffer and encoded length.
-    pub const fn new(buf: B, len: usize) -> Self {
-        Self { buf, len }
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `len` is greater than the provided buffer length.
+    pub fn new(buf: B, len: usize) -> Result<Self, EncodeError> {
+        if len > buf.as_ref().len() {
+            return Err(EncodeError::BufferTooSmall);
+        }
+        Ok(Self { buf, len })
     }
 
     /// Returns the encoded length.
@@ -91,7 +98,7 @@ impl<B: AsMut<[u8]>> EncodedMessage<B> {
 
 impl<B: AsRef<[u8]>> AsRef<[u8]> for EncodedMessage<B> {
     fn as_ref(&self) -> &[u8] {
-        &self.buf.as_ref()[..self.len]
+        self.buf.as_ref().get(..self.len).unwrap_or_default()
     }
 }
 

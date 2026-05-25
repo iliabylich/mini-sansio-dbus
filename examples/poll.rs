@@ -58,7 +58,7 @@ where
 {
     let next_serial = serial.current();
     let len = message.encode_message(buf.as_mut())?;
-    let mut message = EncodedMessage::new(buf, len);
+    let mut message = EncodedMessage::new(buf, len)?;
     message.set_serial(next_serial)?;
     queue
         .push(message)

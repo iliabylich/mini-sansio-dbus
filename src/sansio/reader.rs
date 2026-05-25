@@ -34,7 +34,7 @@ impl DBusReader {
         match self.state {
             State::ReadHeader { bytes_read } => {
                 buf.resize(HEADER_LEN, 0);
-                let remainder = &mut buf[bytes_read..HEADER_LEN];
+                let remainder = buf.get_mut(bytes_read..HEADER_LEN)?;
                 Some(DBusWants::Read {
                     buf: remainder,
                     seq: self.seq,
@@ -46,7 +46,7 @@ impl DBusReader {
                 message_len,
             } => {
                 buf.resize(message_len, 0);
-                let remainder = &mut buf[bytes_read..message_len];
+                let remainder = buf.get_mut(bytes_read..message_len)?;
                 Some(DBusWants::Read {
                     buf: remainder,
                     seq: self.seq,
@@ -63,13 +63,17 @@ impl DBusReader {
     ) -> Result<Option<usize>, DBusError> {
         match &mut self.state {
             State::ReadHeader { bytes_read } => {
-                *bytes_read += len;
-                self.seq += 1;
+                *bytes_read = bytes_read
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
                 if *bytes_read == HEADER_LEN {
                     let header = Header::from_bytes(buf)?;
 
-                    let header_fields_len = (header.header_fields_len as usize).next_multiple_of(8);
+                    let header_fields_len = (header.header_fields_len as usize)
+                        .checked_next_multiple_of(8)
+                        .ok_or(DBusError::MessageLengthOverflow)?;
                     let message_len = HEADER_LEN
                         .checked_add(header_fields_len)
                         .and_then(|len| len.checked_add(header.body_len as usize))
@@ -88,8 +92,10 @@ impl DBusReader {
                 message_len,
                 bytes_read,
             } => {
-                *bytes_read += len;
-                self.seq += 1;
+                *bytes_read = bytes_read
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
                 if *bytes_read == *message_len {
                     let len = *message_len;

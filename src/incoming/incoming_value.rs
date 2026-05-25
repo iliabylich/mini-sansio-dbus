@@ -114,28 +114,28 @@ impl<'a> IncomingValue<'a> {
                 let mut iter = struct_.fields_iter().map_err(|_| core::fmt::Error)?;
                 writeln!(w, "{offset}struct:")?;
                 while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
-                    item.log(w, indent + 4)?;
+                    item.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
                 }
             }
             Self::Array(array) => {
                 let mut iter = array.items_iter();
                 writeln!(w, "{offset}array:")?;
                 while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
-                    item.log(w, indent + 4)?;
+                    item.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
                 }
             }
             Self::DictEntry(pair) => {
                 writeln!(w, "{offset}dict:")?;
                 let (key, value) = pair.key_value().map_err(|_| core::fmt::Error)?;
                 writeln!(w, "{offset}    key:")?;
-                key.log(w, indent + 8)?;
+                key.log(w, indent.checked_add(8).ok_or(core::fmt::Error)?)?;
                 writeln!(w, "{offset}    value:")?;
-                value.log(w, indent + 8)?;
+                value.log(w, indent.checked_add(8).ok_or(core::fmt::Error)?)?;
             }
             Self::Variant(variant) => {
                 writeln!(w, "{offset}variant:")?;
                 let value = variant.materialize().map_err(|_| core::fmt::Error)?;
-                value.log(w, indent + 4)?;
+                value.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
             }
         }
 

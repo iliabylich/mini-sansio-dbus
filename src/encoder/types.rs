@@ -361,9 +361,12 @@ impl<T: DbusType> DbusType for Variant<T> {
         cur.write_u8(0)?;
         let signature_start = cur.pos();
         T::write_signature(cur)?;
-        let signature_len = cur.pos() - signature_start;
+        let signature_len = cur
+            .pos()
+            .checked_sub(signature_start)
+            .ok_or(EncodeError::ContainerTooLong)?;
         let signature_len = u8::try_from(signature_len).map_err(|_| EncodeError::ValueTooLong)?;
-        cur.set_u8(len_pos, signature_len);
+        cur.set_u8(len_pos, signature_len)?;
         cur.write_u8(0)?;
         Ok(VariantSlot::new(cur))
     }

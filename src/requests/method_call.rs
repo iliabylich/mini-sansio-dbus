@@ -99,7 +99,7 @@ where
 
         let reply_serial = serial.current();
         let len = (self.send)(input, self.data.clone(), buf.as_mut())?;
-        let mut message = EncodedMessage::new(buf, len);
+        let mut message = EncodedMessage::new(buf, len)?;
         message.set_serial(reply_serial)?;
         queue
             .push(message)

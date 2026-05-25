@@ -66,7 +66,7 @@ impl DBusConnector {
             }),
 
             State::WriteAuthExternal { bytes_written } => {
-                let remainder = &AUTH_EXTERNAL[bytes_written..];
+                let remainder = AUTH_EXTERNAL.get(bytes_written..)?;
                 Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
@@ -74,13 +74,13 @@ impl DBusConnector {
             }
 
             State::ReadData { bytes_read } => {
-                let remaning = DATA.len() - bytes_read;
+                let remaning = DATA.len().checked_sub(bytes_read)?;
                 *buf = vec![0; remaning];
                 Some(DBusWants::Read { buf, seq: self.seq })
             }
 
             State::WriteData { bytes_written } => {
-                let remainder = &DATA[bytes_written..];
+                let remainder = DATA.get(bytes_written..)?;
                 Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
@@ -88,13 +88,13 @@ impl DBusConnector {
             }
 
             State::ReadGUID { bytes_read } => {
-                let remaning = GUID_LENGTH - bytes_read;
+                let remaning = GUID_LENGTH.checked_sub(bytes_read)?;
                 *buf = vec![0; remaning];
                 Some(DBusWants::Read { buf, seq: self.seq })
             }
 
             State::WriteBegin { bytes_written } => {
-                let remainder = &BEGIN[bytes_written..];
+                let remainder = BEGIN.get(bytes_written..)?;
                 Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
@@ -105,41 +105,47 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) const fn satisfy_socket(&mut self) -> Result<(), DBusError> {
+    pub(crate) fn satisfy_socket(&mut self) -> Result<(), DBusError> {
         if !matches!(self.state, State::Socket) {
             return Err(DBusError::InternalError);
         }
 
         self.state = State::Connect;
-        self.seq += 1;
+        self.advance_seq()?;
         Ok(())
     }
 
-    pub(crate) const fn satisfy_connect(&mut self) -> Result<(), DBusError> {
+    pub(crate) fn satisfy_connect(&mut self) -> Result<(), DBusError> {
         if !matches!(self.state, State::Connect) {
             return Err(DBusError::InternalError);
         }
 
         self.state = State::WriteZero;
-        self.seq += 1;
+        self.advance_seq()?;
         Ok(())
     }
 
     pub(crate) fn satisfy_read(&mut self, len: usize, buf: &[u8]) -> Result<(), DBusError> {
         match &mut self.state {
             State::ReadData { bytes_read } => {
-                *bytes_read += len;
-                self.seq += 1;
+                *bytes_read = bytes_read
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
-                let remainder = &buf[*bytes_read..DATA.len()];
+                let remainder = buf
+                    .get(*bytes_read..DATA.len())
+                    .ok_or(DBusError::InternalError)?;
                 if remainder.is_empty() {
                     self.state = State::WriteData { bytes_written: 0 };
                 }
                 Ok(())
             }
             State::ReadGUID { bytes_read } => {
-                *bytes_read += len;
-                self.seq += 1;
+                *bytes_read = bytes_read
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
                 if *bytes_read == GUID_LENGTH {
                     self.state = State::WriteBegin { bytes_written: 0 };
@@ -155,36 +161,46 @@ impl DBusConnector {
             State::WriteZero => {
                 if len == 1 {
                     self.state = State::WriteAuthExternal { bytes_written: 0 };
-                    self.seq += 1;
+                    self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
                 }
                 Ok(None)
             }
 
             State::WriteAuthExternal { bytes_written } => {
-                *bytes_written += len;
-                self.seq += 1;
+                *bytes_written = bytes_written
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
-                let remainder = &AUTH_EXTERNAL[*bytes_written..];
+                let remainder = AUTH_EXTERNAL
+                    .get(*bytes_written..)
+                    .ok_or(DBusError::InternalError)?;
                 if remainder.is_empty() {
                     self.state = State::ReadData { bytes_read: 0 };
                 }
                 Ok(None)
             }
             State::WriteData { bytes_written } => {
-                *bytes_written += len;
-                self.seq += 1;
+                *bytes_written = bytes_written
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
-                let remainder = &DATA[*bytes_written..];
+                let remainder = DATA.get(*bytes_written..).ok_or(DBusError::InternalError)?;
                 if remainder.is_empty() {
                     self.state = State::ReadGUID { bytes_read: 0 };
                 }
                 Ok(None)
             }
             State::WriteBegin { bytes_written } => {
-                *bytes_written += len;
-                self.seq += 1;
+                *bytes_written = bytes_written
+                    .checked_add(len)
+                    .ok_or(DBusError::InternalError)?;
+                self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
 
-                let remainder = &BEGIN[*bytes_written..];
+                let remainder = BEGIN
+                    .get(*bytes_written..)
+                    .ok_or(DBusError::InternalError)?;
                 if remainder.is_empty() {
                     self.state = State::Stopped;
                     Ok(Some(self.seq))
@@ -198,5 +214,10 @@ impl DBusConnector {
 
     pub(crate) const fn stop(&mut self) {
         self.state = State::Stopped;
+    }
+
+    fn advance_seq(&mut self) -> Result<(), DBusError> {
+        self.seq = self.seq.checked_add(1).ok_or(DBusError::InternalError)?;
+        Ok(())
     }
 }

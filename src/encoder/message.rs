@@ -117,7 +117,7 @@ impl<'buf> MessageEncoder<'buf> {
             .checked_sub(body_start)
             .ok_or(EncodeError::ContainerTooLong)?;
         let body_len = u32::try_from(body_len).map_err(|_| EncodeError::ContainerTooLong)?;
-        self.cur.set_u32(4, body_len);
+        self.cur.set_u32(4, body_len)?;
         Ok(self.cur.pos())
     }
 
@@ -137,7 +137,7 @@ impl<'buf> MessageEncoder<'buf> {
                 .ok_or(EncodeError::ContainerTooLong)?;
             let header_fields_len =
                 u32::try_from(header_fields_len).map_err(|_| EncodeError::ContainerTooLong)?;
-            self.cur.set_u32(12, header_fields_len);
+            self.cur.set_u32(12, header_fields_len)?;
             self.cur.align(8)?;
             self.body_start = Some(self.cur.pos());
         }

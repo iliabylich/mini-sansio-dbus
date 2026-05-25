@@ -9,12 +9,12 @@
 #![warn(unused_lifetimes)]
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::expect_used)]
+#![warn(clippy::panic)]
 #![warn(clippy::arithmetic_side_effects)]
+#![warn(clippy::indexing_slicing)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 #![expect(clippy::redundant_pub_crate)]
-#![expect(clippy::cast_possible_truncation)]
-#![expect(clippy::arithmetic_side_effects)]
 #![doc = include_str!("../README.md")]
 
 mod encoder;

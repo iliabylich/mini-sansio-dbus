@@ -165,7 +165,7 @@ impl DBusConnection {
                     return Ok(None);
                 };
 
-                let buf = &readbuf[..len];
+                let buf = readbuf.get(..len).ok_or(DBusError::InternalError)?;
 
                 let message = IncomingMessage::new(buf)?;
                 Ok(Some(message))

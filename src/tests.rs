@@ -70,7 +70,10 @@ fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::Enc
     }
     let len = encoder.finish()?;
 
-    assert_eq!(&buf[..len], MESSAGE_BLOB);
+    assert_eq!(
+        buf.get(..len).ok_or(crate::EncodeError::BufferTooSmall)?,
+        MESSAGE_BLOB
+    );
 
     Ok(())
 }
@@ -135,7 +138,7 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
     ));
 
     let Some(IncomingValue::Struct(struct_)) = body.try_next()? else {
-        panic!("expected struct value");
+        return Err(DBusError::WrongValue);
     };
     let mut fields = struct_.fields_iter()?;
     assert!(matches!(
@@ -149,7 +152,7 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
     assert!(fields.try_next()?.is_none());
 
     let Some(IncomingValue::Array(array)) = body.try_next()? else {
-        panic!("expected array value");
+        return Err(DBusError::WrongValue);
     };
     let mut items = array.items_iter();
     assert!(matches!(items.try_next()?, Some(IncomingValue::UInt16(7))));
@@ -157,14 +160,14 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
     assert!(items.try_next()?.is_none());
 
     let Some(IncomingValue::DictEntry(dict_entry)) = body.try_next()? else {
-        panic!("expected dict entry value");
+        return Err(DBusError::WrongValue);
     };
     let (key, value) = dict_entry.key_value()?;
     assert!(matches!(key, IncomingValue::String("dict-key")));
     assert!(matches!(value, IncomingValue::UInt32(99)));
 
     let Some(IncomingValue::Variant(variant)) = body.try_next()? else {
-        panic!("expected variant value");
+        return Err(DBusError::WrongValue);
     };
     assert!(matches!(variant.materialize()?, IncomingValue::Int32(-9)));
     assert!(body.try_next()?.is_none());
@@ -184,7 +187,7 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
     );
     let mut buf = vec![0; message.encoded_capacity()];
     let len = message.encode_message(&mut buf)?;
-    let decoded = crate::IncomingMessage::new(&buf[..len])?;
+    let decoded = crate::IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
     assert_eq!(decoded.serial, 0);
@@ -204,7 +207,7 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
         Some(IncomingValue::String("Name"))
     ));
     let Some(IncomingValue::Variant(variant)) = body.try_next()? else {
-        panic!("expected variant value");
+        return Err(DBusError::WrongValue);
     };
     assert!(matches!(
         variant.materialize()?,
@@ -234,7 +237,7 @@ fn set_property_encodes_array_variant() -> Result<(), DBusError> {
     );
     let mut buf = vec![0; message.encoded_capacity()];
     let len = message.encode_message(&mut buf)?;
-    let decoded = crate::IncomingMessage::new(&buf[..len])?;
+    let decoded = crate::IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
     assert_eq!(decoded.signature, Some("ssv"));
 
@@ -248,10 +251,10 @@ fn set_property_encodes_array_variant() -> Result<(), DBusError> {
         Some(IncomingValue::String("Values"))
     ));
     let Some(IncomingValue::Variant(variant)) = body.try_next()? else {
-        panic!("expected variant value");
+        return Err(DBusError::WrongValue);
     };
     let IncomingValue::Array(array) = variant.materialize()? else {
-        panic!("expected array value");
+        return Err(DBusError::WrongValue);
     };
     let mut items = array.items_iter();
     assert!(matches!(items.try_next()?, Some(IncomingValue::UInt32(1))));

@@ -55,10 +55,18 @@ impl<'a> IncomingMessage<'a> {
         } = HeaderFields::cut(Cursor::new(headers, 0))?;
 
         let body = if let Some(signature) = signature {
-            let body_padding = (8 - (header_fields_len as usize % 8)) % 8;
+            let padded_header_len = (header_fields_len as usize)
+                .checked_next_multiple_of(8)
+                .ok_or(DBusError::MalformedBody)?;
+            let body_padding = padded_header_len
+                .checked_sub(header_fields_len as usize)
+                .ok_or(DBusError::MalformedBody)?;
+            let body_end = body_padding
+                .checked_add(body_len as usize)
+                .ok_or(DBusError::MalformedBody)?;
             let body_buf = cur
                 .buf()
-                .get(body_padding..body_padding + body_len as usize)
+                .get(body_padding..body_end)
                 .ok_or(DBusError::MalformedBody)?;
             Some(IncomingBody::new(signature, Cursor::new(body_buf, 0)))
         } else {

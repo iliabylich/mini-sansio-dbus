@@ -46,7 +46,10 @@ impl<'a> IncomingCompleteType<'a> {
             remainder = remainder
                 .strip_prefix(')')
                 .ok_or(DBusError::MalformedSignature)?;
-            let len = buf.len() - remainder.len();
+            let len = buf
+                .len()
+                .checked_sub(remainder.len())
+                .ok_or(DBusError::MalformedSignature)?;
             let full = &buf[..len];
             return Ok((Self::Struct { full }, remainder));
         } else if start == '{' {
@@ -59,7 +62,10 @@ impl<'a> IncomingCompleteType<'a> {
             remainder = remainder
                 .strip_prefix('}')
                 .ok_or(DBusError::MalformedSignature)?;
-            let len = buf.len() - remainder.len();
+            let len = buf
+                .len()
+                .checked_sub(remainder.len())
+                .ok_or(DBusError::MalformedSignature)?;
             let full = &buf[..len];
 
             return Ok((
@@ -134,11 +140,11 @@ impl<'a> IncomingCompleteType<'a> {
 
             Self::String | Self::ObjectPath => {
                 let len = cur.cut_u32().map_err(|_| DBusError::MalformedSignature)?;
-                4 + len as usize + 1
+                add_all(&[4, len as usize, 1])?
             }
             Self::Signature => {
                 let len = cur.cut_u8().map_err(|_| DBusError::MalformedSignature)?;
-                1 + len as usize + 1
+                add_all(&[1, len as usize, 1])?
             }
             Self::Struct { full } => {
                 let mut len = 0;
@@ -146,10 +152,14 @@ impl<'a> IncomingCompleteType<'a> {
                 while let Some(field_type) = iter.try_next()? {
                     let old_offset = cur.offset();
                     cur.align(field_type.alignment())?;
-                    len += cur.offset() - old_offset;
+                    let field_offset = cur
+                        .offset()
+                        .checked_sub(old_offset)
+                        .ok_or(DBusError::MalformedValue)?;
+                    len = add_all(&[len, field_offset])?;
 
                     let fieldsize = field_type.bytesize(cur)?;
-                    len += fieldsize;
+                    len = add_all(&[len, fieldsize])?;
 
                     cur.take(fieldsize)?;
                 }
@@ -163,8 +173,11 @@ impl<'a> IncomingCompleteType<'a> {
                 }
                 let old_offset = cur.offset();
                 cur.align(item_type.alignment())?;
-                let offset = cur.offset() - old_offset;
-                4 + offset + bytesize as usize
+                let offset = cur
+                    .offset()
+                    .checked_sub(old_offset)
+                    .ok_or(DBusError::MalformedArray)?;
+                add_all(&[4, offset, bytesize as usize])?
             }
             Self::DictEntry { key, value, .. } => {
                 let (key_type, leftover) = Self::cut(key)?;
@@ -179,16 +192,22 @@ impl<'a> IncomingCompleteType<'a> {
 
                 let old_offset = cur.offset();
                 cur.align(key_type.alignment())?;
-                let keyoffset = cur.offset() - old_offset;
+                let keyoffset = cur
+                    .offset()
+                    .checked_sub(old_offset)
+                    .ok_or(DBusError::MalformedDictEntry)?;
                 let keysize = key_type.bytesize(cur)?;
                 cur.take(keysize)?;
 
                 let old_offset = cur.offset();
                 cur.align(value_type.alignment())?;
-                let valueoffset = cur.offset() - old_offset;
+                let valueoffset = cur
+                    .offset()
+                    .checked_sub(old_offset)
+                    .ok_or(DBusError::MalformedDictEntry)?;
                 let valuesize = value_type.bytesize(cur)?;
 
-                keyoffset + keysize + valueoffset + valuesize
+                add_all(&[keyoffset, keysize, valueoffset, valuesize])?
             }
             Self::Variant => {
                 let signature = cur.cut_signature()?;
@@ -199,10 +218,13 @@ impl<'a> IncomingCompleteType<'a> {
 
                 let old_offset = cur.offset();
                 cur.align(complete_type.alignment())?;
-                let offset = cur.offset() - old_offset;
+                let offset = cur
+                    .offset()
+                    .checked_sub(old_offset)
+                    .ok_or(DBusError::MalformedVariant)?;
                 let valuesize = complete_type.bytesize(cur)?;
 
-                1 + signature.len() + 1 + offset + valuesize
+                add_all(&[1, signature.len(), 1, offset, valuesize])?
             }
         };
 
@@ -230,6 +252,12 @@ impl<'a> IncomingCompleteType<'a> {
             | Self::DictEntry { .. } => 8,
         }
     }
+}
+
+fn add_all(values: &[usize]) -> Result<usize, DBusError> {
+    values.iter().try_fold(0usize, |acc, value| {
+        acc.checked_add(*value).ok_or(DBusError::MalformedValue)
+    })
 }
 
 pub(crate) struct CompleteTypeStructFieldsIter<'a> {
