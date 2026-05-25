@@ -1,4 +1,4 @@
-use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body};
 
 /// Represents a request to subscribe to something in `DBus`
 pub struct AddMatch<'a> {
@@ -24,8 +24,9 @@ impl EncodeMessage for AddMatch<'_> {
         encoder.set_member("AddMatch")?;
         encoder.set_interface("org.freedesktop.DBus")?;
         encoder.set_destination("org.freedesktop.DBus")?;
-        encoder.set_body_signature("s")?;
-        encoder.next_body_slot::<Str>()?.write(self.rule)?;
+        dbus_body!(encoder, {
+            str(self.rule),
+        });
         encoder.finish()
     }
 }

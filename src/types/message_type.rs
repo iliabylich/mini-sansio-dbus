@@ -29,8 +29,8 @@ impl TryFrom<u8> for MessageType {
     }
 }
 
-impl From<MessageType> for u8 {
-    fn from(message_type: MessageType) -> Self {
-        message_type as Self
+impl MessageType {
+    pub(crate) const fn into_u8(self) -> u8 {
+        self as u8
     }
 }

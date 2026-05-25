@@ -1,5 +1,5 @@
 // #![no_std]
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 #![warn(trivial_casts)]
@@ -17,6 +17,8 @@
 #![expect(clippy::redundant_pub_crate)]
 #![doc = include_str!("../README.md")]
 
+mod body_macro;
+mod const_helpers;
 mod encoder;
 mod error;
 mod incoming;
@@ -36,11 +38,7 @@ pub use incoming::{
 pub use introspectible_object_at::{IntrospectibleObjectAt, IntrospectibleObjectAtRequest};
 /// A module with many known message types
 pub mod messages;
-pub use encoder::{
-    Array, ArraySlot, DbusType, DictEntry, DictEntrySlot, EncodeError,
-    MessageEncoder as SliceMessageEncoder, ObjectPath, Signature, Slot, Str, Struct2, Struct2Slot,
-    UnixFd, Variant, VariantSlot, WriteValue,
-};
+pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
 pub use error::DBusError;
 pub use sansio::{DBusConnection, DBusSerial, EncodeMessage, OutgoingQueue};
 pub use satisfy::DBusSatisfy;

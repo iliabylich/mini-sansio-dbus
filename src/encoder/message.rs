@@ -1,10 +1,7 @@
 use crate::{
     MessageType,
-    encoder::{
-        EncodeError, EncodeResult,
-        cursor::SliceCursor,
-        types::{DbusType, write_signature, write_string_like},
-    },
+    const_helpers::{try_, u8_from_usize, u32_from_usize},
+    encoder::{EncodeError, EncodeResult, cursor::SliceCursor},
     types::HeaderFieldCode,
 };
 
@@ -16,17 +13,32 @@ pub struct MessageEncoder<'buf> {
     body_start: Option<usize>,
 }
 
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct __DbusArrayFrame {
+    len_pos: usize,
+    data_start: usize,
+}
+
 impl<'buf> MessageEncoder<'buf> {
     /// Creates a new encoder over `buf`.
-    pub fn new(buf: &'buf mut [u8], message_type: MessageType, serial: u32) -> EncodeResult<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there's not enough space in the given `buf`.
+    pub const fn new(
+        buf: &'buf mut [u8],
+        message_type: MessageType,
+        serial: u32,
+    ) -> EncodeResult<Self> {
         let mut cur = SliceCursor::new(buf);
-        cur.write_u8(b'l')?;
-        cur.write_u8(message_type.into())?;
-        cur.write_u8(0)?;
-        cur.write_u8(1)?;
-        cur.write_u32(0)?;
-        cur.write_u32(serial)?;
-        cur.write_u32(0)?;
+        try_!(cur.write_u8(b'l'));
+        try_!(cur.write_u8(message_type.into_u8()));
+        try_!(cur.write_u8(0));
+        try_!(cur.write_u8(1));
+        try_!(cur.write_u32(0));
+        try_!(cur.write_u32(serial));
+        try_!(cur.write_u32(0));
         Ok(Self {
             cur,
             header_fields_start: 16,
@@ -35,38 +47,68 @@ impl<'buf> MessageEncoder<'buf> {
     }
 
     /// Sets the object path header field.
-    pub fn set_path(&mut self, path: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_path(&mut self, path: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Path, b'o', path)
     }
 
     /// Sets the interface header field.
-    pub fn set_interface(&mut self, interface: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_interface(&mut self, interface: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Interface, b's', interface)
     }
 
     /// Sets the member header field.
-    pub fn set_member(&mut self, member: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_member(&mut self, member: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Member, b's', member)
     }
 
     /// Sets the error name header field.
-    pub fn set_error_name(&mut self, error_name: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_error_name(&mut self, error_name: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::ErrorName, b's', error_name)
     }
 
     /// Sets the reply serial header field.
-    pub fn set_reply_serial(&mut self, reply_serial: u32) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_reply_serial(&mut self, reply_serial: u32) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_u32(&mut self.cur, HeaderFieldCode::ReplySerial, reply_serial)
     }
 
     /// Sets the destination header field.
-    pub fn set_destination(&mut self, destination: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_destination(&mut self, destination: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_string(
             &mut self.cur,
             HeaderFieldCode::Destination,
@@ -76,101 +118,249 @@ impl<'buf> MessageEncoder<'buf> {
     }
 
     /// Sets the sender header field.
-    pub fn set_sender(&mut self, sender: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_sender(&mut self, sender: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Sender, b's', sender)
     }
 
     /// Sets the unix file descriptor count header field.
-    pub fn set_unix_fds(&mut self, unix_fds: u32) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_unix_fds(&mut self, unix_fds: u32) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         write_header_u32(&mut self.cur, HeaderFieldCode::UnixFds, unix_fds)
     }
 
     /// Sets the body signature header field from a caller-provided D-Bus signature.
-    pub fn set_body_signature(&mut self, signature: &str) -> EncodeResult<()> {
-        self.ensure_header_open()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header is already closed, the output buffer is too small, or the
+    /// encoded message would exceed a D-Bus length limit.
+    pub const fn set_body_signature(&mut self, signature: &str) -> EncodeResult<()> {
+        try_!(self.ensure_header_open());
         if signature.is_empty() {
             return Ok(());
         }
-        self.cur.align(8)?;
-        self.cur.write_u8(HeaderFieldCode::Signature.into())?;
-        write_variant_signature(&mut self.cur, b'g')?;
-        write_signature(&mut self.cur, signature)
+        try_!(self.cur.align(8));
+        try_!(self.cur.write_u8(HeaderFieldCode::Signature.into_u8()));
+        try_!(write_variant_signature(&mut self.cur, b'g'));
+        try_!(write_signature(&mut self.cur, signature));
+        Ok(())
     }
 
-    /// Starts the next top-level body slot.
-    pub fn next_body_slot<T: DbusType>(&mut self) -> EncodeResult<T::Slot<'_, 'buf>> {
-        self.ensure_body_started()?;
-        T::start_slot(&mut self.cur)
+    #[doc(hidden)]
+    pub const fn __dbus_begin_body(&mut self) -> EncodeResult<()> {
+        self.ensure_body_started()
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_align(&mut self, align: usize) -> EncodeResult<()> {
+        self.cur.align(align)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_u8(&mut self, value: u8) -> EncodeResult<()> {
+        self.cur.write_u8(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_bool(&mut self, value: bool) -> EncodeResult<()> {
+        try_!(self.cur.align(4));
+        self.cur.write_u32(value as u32)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_i16(&mut self, value: i16) -> EncodeResult<()> {
+        try_!(self.cur.align(2));
+        self.cur.write_i16(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_u16(&mut self, value: u16) -> EncodeResult<()> {
+        try_!(self.cur.align(2));
+        self.cur.write_u16(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_i32(&mut self, value: i32) -> EncodeResult<()> {
+        try_!(self.cur.align(4));
+        self.cur.write_i32(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_u32(&mut self, value: u32) -> EncodeResult<()> {
+        try_!(self.cur.align(4));
+        self.cur.write_u32(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_i64(&mut self, value: i64) -> EncodeResult<()> {
+        try_!(self.cur.align(8));
+        self.cur.write_i64(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_u64(&mut self, value: u64) -> EncodeResult<()> {
+        try_!(self.cur.align(8));
+        self.cur.write_u64(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_f64(&mut self, value: f64) -> EncodeResult<()> {
+        try_!(self.cur.align(8));
+        self.cur.write_f64(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_unix_fd(&mut self, value: u32) -> EncodeResult<()> {
+        try_!(self.cur.align(4));
+        self.cur.write_u32(value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_string_like(&mut self, value: &str) -> EncodeResult<()> {
+        write_string_like(&mut self.cur, value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_write_signature_value(&mut self, value: &str) -> EncodeResult<()> {
+        write_signature(&mut self.cur, value)
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_start_array(
+        &mut self,
+        item_alignment: usize,
+    ) -> EncodeResult<__DbusArrayFrame> {
+        try_!(self.cur.align(4));
+        let len_pos = self.cur.pos();
+        try_!(self.cur.write_u32(0));
+        try_!(self.cur.align(item_alignment));
+        let data_start = self.cur.pos();
+        Ok(__DbusArrayFrame {
+            len_pos,
+            data_start,
+        })
+    }
+
+    #[doc(hidden)]
+    pub const fn __dbus_finish_array(&mut self, frame: __DbusArrayFrame) -> EncodeResult<()> {
+        let Some(byte_len) = self.cur.pos().checked_sub(frame.data_start) else {
+            return Err(EncodeError::ContainerTooLong);
+        };
+        let Some(byte_len) = u32_from_usize(byte_len) else {
+            return Err(EncodeError::ContainerTooLong);
+        };
+        self.cur.set_u32(frame.len_pos, byte_len)
     }
 
     /// Finishes the message and returns the encoded byte length.
-    pub fn finish(mut self) -> EncodeResult<usize> {
-        self.ensure_body_started()?;
-        let body_start = self
-            .body_start
-            .ok_or(EncodeError::BodySignatureIncomplete)?;
-        let body_len = self
-            .cur
-            .pos()
-            .checked_sub(body_start)
-            .ok_or(EncodeError::ContainerTooLong)?;
-        let body_len = u32::try_from(body_len).map_err(|_| EncodeError::ContainerTooLong)?;
-        self.cur.set_u32(4, body_len)?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header or body length cannot be finalized.
+    pub const fn finish(mut self) -> EncodeResult<usize> {
+        try_!(self.ensure_body_started());
+        let Some(body_start) = self.body_start else {
+            return Err(EncodeError::BodySignatureIncomplete);
+        };
+
+        let Some(body_len) = self.cur.pos().checked_sub(body_start) else {
+            return Err(EncodeError::ContainerTooLong);
+        };
+
+        let Some(body_len) = u32_from_usize(body_len) else {
+            return Err(EncodeError::ContainerTooLong);
+        };
+        try_!(self.cur.set_u32(4, body_len));
         Ok(self.cur.pos())
     }
 
-    fn ensure_header_open(&self) -> EncodeResult<()> {
+    const fn ensure_header_open(&self) -> EncodeResult<()> {
         if self.body_start.is_some() {
             return Err(EncodeError::HeaderAlreadyFinished);
         }
         Ok(())
     }
 
-    fn ensure_body_started(&mut self) -> EncodeResult<()> {
+    const fn ensure_body_started(&mut self) -> EncodeResult<()> {
         if self.body_start.is_none() {
-            let header_fields_len = self
-                .cur
-                .pos()
-                .checked_sub(self.header_fields_start)
-                .ok_or(EncodeError::ContainerTooLong)?;
-            let header_fields_len =
-                u32::try_from(header_fields_len).map_err(|_| EncodeError::ContainerTooLong)?;
-            self.cur.set_u32(12, header_fields_len)?;
-            self.cur.align(8)?;
+            let Some(header_fields_len) = self.cur.pos().checked_sub(self.header_fields_start)
+            else {
+                return Err(EncodeError::ContainerTooLong);
+            };
+            let Some(header_fields_len) = u32_from_usize(header_fields_len) else {
+                return Err(EncodeError::ContainerTooLong);
+            };
+            try_!(self.cur.set_u32(12, header_fields_len));
+            try_!(self.cur.align(8));
             self.body_start = Some(self.cur.pos());
         }
         Ok(())
     }
 }
 
-fn write_header_string(
+const fn write_header_string(
     cur: &mut SliceCursor<'_>,
     field: HeaderFieldCode,
     value_signature: u8,
     value: &str,
 ) -> EncodeResult<()> {
-    cur.align(8)?;
-    cur.write_u8(field.into())?;
-    write_variant_signature(cur, value_signature)?;
-    write_string_like(cur, value)
+    try_!(cur.align(8));
+    try_!(cur.write_u8(field.into_u8()));
+    try_!(write_variant_signature(cur, value_signature));
+    try_!(write_string_like(cur, value));
+    Ok(())
 }
 
-fn write_header_u32(
+const fn write_header_u32(
     cur: &mut SliceCursor<'_>,
     field: HeaderFieldCode,
     value: u32,
 ) -> EncodeResult<()> {
-    cur.align(8)?;
-    cur.write_u8(field.into())?;
-    write_variant_signature(cur, b'u')?;
-    cur.align(4)?;
-    cur.write_u32(value)
+    try_!(cur.align(8));
+    try_!(cur.write_u8(field.into_u8()));
+    try_!(write_variant_signature(cur, b'u'));
+    try_!(cur.align(4));
+    try_!(cur.write_u32(value));
+    Ok(())
 }
 
-fn write_variant_signature(cur: &mut SliceCursor<'_>, signature: u8) -> EncodeResult<()> {
-    cur.write_u8(1)?;
-    cur.write_u8(signature)?;
-    cur.write_u8(0)
+const fn write_variant_signature(cur: &mut SliceCursor<'_>, signature: u8) -> EncodeResult<()> {
+    try_!(cur.write_u8(1));
+    try_!(cur.write_u8(signature));
+    try_!(cur.write_u8(0));
+    Ok(())
+}
+
+const fn write_string_like(cur: &mut SliceCursor<'_>, value: &str) -> EncodeResult<()> {
+    let Some(len) = u32_from_usize(value.len()) else {
+        return Err(EncodeError::ValueTooLong);
+    };
+
+    try_!(cur.align(4));
+    try_!(cur.write_u32(len));
+    try_!(cur.write_bytes(value.as_bytes()));
+    try_!(cur.write_u8(0));
+    Ok(())
+}
+
+const fn write_signature(cur: &mut SliceCursor<'_>, value: &str) -> EncodeResult<()> {
+    let Some(len) = u8_from_usize(value.len()) else {
+        return Err(EncodeError::ValueTooLong);
+    };
+
+    try_!(cur.write_u8(len));
+    try_!(cur.write_bytes(value.as_bytes()));
+    try_!(cur.write_u8(0));
+    Ok(())
 }

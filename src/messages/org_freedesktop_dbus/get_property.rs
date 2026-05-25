@@ -1,4 +1,4 @@
-use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body};
 
 /// Represents a request to get a single property of `DBus` object
 pub struct GetProperty<'a> {
@@ -41,9 +41,10 @@ impl EncodeMessage for GetProperty<'_> {
         encoder.set_member("Get")?;
         encoder.set_interface("org.freedesktop.DBus.Properties")?;
         encoder.set_destination(self.destination)?;
-        encoder.set_body_signature("ss")?;
-        encoder.next_body_slot::<Str>()?.write(self.interface)?;
-        encoder.next_body_slot::<Str>()?.write(self.property)?;
+        dbus_body!(encoder, {
+            str(self.interface),
+            str(self.property),
+        });
         encoder.finish()
     }
 }

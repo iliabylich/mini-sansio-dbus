@@ -1,4 +1,4 @@
-use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body};
 
 /// Represents a request to `DBus` to occupy some name
 pub struct RequestName<'a> {
@@ -24,9 +24,10 @@ impl EncodeMessage for RequestName<'_> {
         encoder.set_member("RequestName")?;
         encoder.set_interface("org.freedesktop.DBus")?;
         encoder.set_destination("org.freedesktop.DBus")?;
-        encoder.set_body_signature("su")?;
-        encoder.next_body_slot::<Str>()?.write(self.name)?;
-        encoder.next_body_slot::<u32>()?.write(7)?;
+        dbus_body!(encoder, {
+            str(self.name),
+            u32(7),
+        });
         encoder.finish()
     }
 }

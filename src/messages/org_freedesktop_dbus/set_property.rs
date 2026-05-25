@@ -1,22 +1,16 @@
-use core::marker::PhantomData;
-
-use crate::{
-    DbusType, EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str,
-    encoder::{Variant, VariantSlot},
-};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body_fragment};
 
 /// Represents a request to set a single property on a given `DBus` object
-pub struct SetProperty<'a, T, F> {
+pub struct SetProperty<'a, F> {
     destination: &'a str,
     path: &'a str,
     interface: &'a str,
     property: &'a str,
     value_capacity: usize,
     write_value: F,
-    _ty: PhantomData<T>,
 }
 
-impl<'a, T, F> SetProperty<'a, T, F> {
+impl<'a, F> SetProperty<'a, F> {
     /// Constructor for the slice-encoded message.
     #[must_use]
     pub const fn new(
@@ -34,15 +28,13 @@ impl<'a, T, F> SetProperty<'a, T, F> {
             property,
             value_capacity,
             write_value,
-            _ty: PhantomData,
         }
     }
 }
 
-impl<T, F> EncodeMessage for SetProperty<'_, T, F>
+impl<F> EncodeMessage for SetProperty<'_, F>
 where
-    T: DbusType,
-    F: for<'slot, 'buf> Fn(VariantSlot<'slot, 'buf, T>) -> Result<(), EncodeError>,
+    F: Fn(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,
 {
     fn encoded_capacity(&self) -> usize {
         256usize
@@ -60,13 +52,12 @@ where
         encoder.set_interface("org.freedesktop.DBus.Properties")?;
         encoder.set_destination(self.destination)?;
         encoder.set_body_signature("ssv")?;
-        encoder.next_body_slot::<Str>()?.write(self.interface)?;
-        encoder.next_body_slot::<Str>()?.write(self.property)?;
-
-        {
-            let variant = encoder.next_body_slot::<Variant<T>>()?;
-            (self.write_value)(variant)?;
-        }
+        encoder.__dbus_begin_body()?;
+        dbus_body_fragment!(encoder, {
+            str(self.interface),
+            str(self.property),
+        });
+        (self.write_value)(&mut encoder)?;
 
         encoder.finish()
     }

@@ -30,8 +30,8 @@ impl From<u8> for HeaderFieldCode {
     }
 }
 
-impl From<HeaderFieldCode> for u8 {
-    fn from(header_field: HeaderFieldCode) -> Self {
-        header_field as Self
+impl HeaderFieldCode {
+    pub(crate) const fn into_u8(self) -> u8 {
+        self as u8
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    DBusError, EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str,
+    DBusError, EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body,
     incoming::IncomingMessage, interface_is, member_is, path_is,
 };
 
@@ -76,8 +76,9 @@ impl EncodeMessage for IntrospectResponse<'_> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn, 0)?;
         encoder.set_reply_serial(self.reply_serial)?;
         encoder.set_destination(self.destination)?;
-        encoder.set_body_signature("s")?;
-        encoder.next_body_slot::<Str>()?.write(self.xml)?;
+        dbus_body!(encoder, {
+            str(self.xml),
+        });
         encoder.finish()
     }
 }

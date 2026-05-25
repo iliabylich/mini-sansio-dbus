@@ -1,4 +1,4 @@
-use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body};
 
 /// Represents a request to unsubscriibe from some `DBus` changes. The opposite of `AddMatch`.
 pub struct RemoveMatch<'a> {
@@ -24,8 +24,9 @@ impl EncodeMessage for RemoveMatch<'_> {
         encoder.set_member("RemoveMatch")?;
         encoder.set_interface("org.freedesktop.DBus")?;
         encoder.set_destination("org.freedesktop.DBus")?;
-        encoder.set_body_signature("s")?;
-        encoder.next_body_slot::<Str>()?.write(self.rule)?;
+        dbus_body!(encoder, {
+            str(self.rule),
+        });
         encoder.finish()
     }
 }

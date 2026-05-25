@@ -1,6 +1,6 @@
 use crate::{
-    Array, DBusError, DictEntry, EncodeMessage, IncomingValue, MessageType, ObjectPath, Signature,
-    SliceMessageEncoder, Str, Struct2, UnixFd, Variant, VariantSlot,
+    DBusError, EncodeError, EncodeMessage, IncomingMessage, IncomingValue, MessageType,
+    SliceMessageEncoder, dbus_body, dbus_body_fragment,
     messages::org_freedesktop_dbus::SetProperty,
 };
 
@@ -22,8 +22,28 @@ const MESSAGE_BLOB: &[u8] = &[
     0, 0, 0, 1, 105, 0, 0, 247, 255, 255, 255,
 ];
 
+const CONST_MACRO_MESSAGE: Result<([u8; 128], usize), EncodeError> = const_macro_message();
+
+const fn const_macro_message() -> Result<([u8; 128], usize), EncodeError> {
+    let mut buf = [0; 128];
+    let mut encoder = match SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 7) {
+        Ok(encoder) => encoder,
+        Err(err) => return Err(err),
+    };
+    dbus_body!(encoder, {
+        u32(42),
+        str("const"),
+        array<u16> [1, 2],
+    });
+    let len = match encoder.finish() {
+        Ok(len) => len,
+        Err(err) => return Err(err),
+    };
+    Ok((buf, len))
+}
+
 #[test]
-fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::EncodeError> {
+fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), EncodeError> {
     let mut buf = vec![0; 512];
     let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 42)?;
     encoder.set_path("/org/example/Object")?;
@@ -32,46 +52,37 @@ fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::Enc
     encoder.set_destination("org.example.Service")?;
     encoder.set_sender(":1.100")?;
     encoder.set_unix_fds(1)?;
-    encoder.set_body_signature("ybnqiuxtdhsog(su)aq{su}v")?;
 
-    encoder.next_body_slot::<u8>()?.write(0x2a)?;
-    encoder.next_body_slot::<bool>()?.write(true)?;
-    encoder.next_body_slot::<i16>()?.write(-1234)?;
-    encoder.next_body_slot::<u16>()?.write(1234)?;
-    encoder.next_body_slot::<i32>()?.write(-123_456)?;
-    encoder.next_body_slot::<u32>()?.write(123_456)?;
-    encoder.next_body_slot::<i64>()?.write(-123_456_789)?;
-    encoder.next_body_slot::<u64>()?.write(123_456_789)?;
-    encoder.next_body_slot::<f64>()?.write(12.5)?;
-    encoder.next_body_slot::<UnixFd>()?.write(0)?;
-    encoder.next_body_slot::<Str>()?.write("hello")?;
-    encoder
-        .next_body_slot::<ObjectPath>()?
-        .write("/org/example/Value")?;
-    encoder.next_body_slot::<Signature>()?.write("su")?;
-    {
-        let mut slot = encoder.next_body_slot::<Struct2<Str, u32>>()?;
-        slot.first_slot()?.write("inside-struct")?;
-        slot.second_slot()?.write(77)?;
-    }
-    {
-        let mut array = encoder.next_body_slot::<Array<u16>>()?;
-        array.next_slot()?.write(7)?;
-        array.next_slot()?.write(8)?;
-    }
-    {
-        let mut slot = encoder.next_body_slot::<DictEntry<Str, u32>>()?;
-        slot.key_slot()?.write("dict-key")?;
-        slot.value_slot()?.write(99)?;
-    }
-    {
-        let mut slot = encoder.next_body_slot::<Variant<i32>>()?;
-        slot.payload_slot()?.write(-9)?;
-    }
+    dbus_body!(encoder, {
+        u8(0x2a),
+        bool(true),
+        i16(-1234),
+        u16(1234),
+        i32(-123_456),
+        u32(123_456),
+        i64(-123_456_789),
+        u64(123_456_789),
+        f64(12.5),
+        unix_fd(0),
+        str("hello"),
+        object_path("/org/example/Value"),
+        signature("su"),
+        struct_ {
+            str("inside-struct"),
+            u32(77),
+        },
+        array<u16> [7, 8],
+        dict_entry {
+            str("dict-key"),
+            u32(99),
+        },
+        variant<i32>(-9),
+    });
+
     let len = encoder.finish()?;
 
     assert_eq!(
-        buf.get(..len).ok_or(crate::EncodeError::BufferTooSmall)?,
+        buf.get(..len).ok_or(EncodeError::BufferTooSmall)?,
         MESSAGE_BLOB
     );
 
@@ -79,8 +90,37 @@ fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::Enc
 }
 
 #[test]
+fn macro_encoder_can_run_in_const_context() -> Result<(), DBusError> {
+    let Ok((buf, len)) = CONST_MACRO_MESSAGE else {
+        return Err(DBusError::MalformedBody);
+    };
+    let message = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
+
+    assert_eq!(message.serial, 7);
+    assert_eq!(message.signature, Some("usaq"));
+
+    let mut body = message.body.ok_or(DBusError::MalformedBody)?;
+    assert!(matches!(body.try_next()?, Some(IncomingValue::UInt32(42))));
+    assert!(matches!(
+        body.try_next()?,
+        Some(IncomingValue::String("const"))
+    ));
+
+    let Some(IncomingValue::Array(array)) = body.try_next()? else {
+        return Err(DBusError::WrongValue);
+    };
+    let mut items = array.items_iter();
+    assert!(matches!(items.try_next()?, Some(IncomingValue::UInt16(1))));
+    assert!(matches!(items.try_next()?, Some(IncomingValue::UInt16(2))));
+    assert!(items.try_next()?.is_none());
+    assert!(body.try_next()?.is_none());
+
+    Ok(())
+}
+
+#[test]
 fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
-    let decoded = crate::IncomingMessage::new(MESSAGE_BLOB)?;
+    let decoded = IncomingMessage::new(MESSAGE_BLOB)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
     assert_eq!(decoded.serial, 42);
@@ -177,17 +217,22 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
 
 #[test]
 fn set_property_encodes_string_variant() -> Result<(), DBusError> {
-    let message = SetProperty::<Str, _>::new(
+    let message = SetProperty::new(
         "org.example.Service",
         "/org/example/Object",
         "org.example.Interface",
         "Name",
         16,
-        |mut variant: VariantSlot<'_, '_, Str>| variant.payload_slot()?.write("online"),
+        |encoder: &mut SliceMessageEncoder<'_>| {
+            dbus_body_fragment!(encoder, {
+                variant<str>("online"),
+            });
+            Ok(())
+        },
     );
     let mut buf = vec![0; message.encoded_capacity()];
     let len = message.encode_message(&mut buf)?;
-    let decoded = crate::IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
+    let decoded = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
     assert_eq!(decoded.serial, 0);
@@ -221,23 +266,22 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
 #[test]
 fn set_property_encodes_array_variant() -> Result<(), DBusError> {
     let values = [1u32, 2, 3];
-    let message = SetProperty::<Array<u32>, _>::new(
+    let message = SetProperty::new(
         "org.example.Service",
         "/org/example/Object",
         "org.example.Interface",
         "Values",
         16,
-        |mut variant: VariantSlot<'_, '_, Array<u32>>| {
-            let mut slot = variant.payload_slot()?;
-            for value in values {
-                slot.next_slot()?.write(value)?;
-            }
+        |encoder: &mut SliceMessageEncoder<'_>| {
+            dbus_body_fragment!(encoder, {
+                variant<array<u32>> [values[0], values[1], values[2]],
+            });
             Ok(())
         },
     );
     let mut buf = vec![0; message.encoded_capacity()];
     let len = message.encode_message(&mut buf)?;
-    let decoded = crate::IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
+    let decoded = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
     assert_eq!(decoded.signature, Some("ssv"));
 

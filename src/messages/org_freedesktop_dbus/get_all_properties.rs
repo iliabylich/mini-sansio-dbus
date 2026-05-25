@@ -1,4 +1,4 @@
-use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, dbus_body};
 
 /// Represents a request to get all object properties
 pub struct GetAllProperties<'a> {
@@ -33,8 +33,9 @@ impl EncodeMessage for GetAllProperties<'_> {
         encoder.set_member("GetAll")?;
         encoder.set_interface("org.freedesktop.DBus.Properties")?;
         encoder.set_destination(self.destination)?;
-        encoder.set_body_signature("s")?;
-        encoder.next_body_slot::<Str>()?.write(self.interface)?;
+        dbus_body!(encoder, {
+            str(self.interface),
+        });
         encoder.finish()
     }
 }
