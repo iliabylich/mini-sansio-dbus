@@ -21,7 +21,6 @@ mod encoder;
 mod error;
 mod incoming;
 mod introspectible_object_at;
-mod requests;
 mod sansio;
 mod satisfy;
 #[cfg(test)]
@@ -43,7 +42,6 @@ pub use encoder::{
     UnixFd, Variant, VariantSlot, WriteValue,
 };
 pub use error::DBusError;
-pub use requests::{IncompleteMethodCall, MethodCall, Subscription};
 pub use sansio::{DBusConnection, DBusSerial, EncodeMessage, OutgoingQueue};
 pub use satisfy::DBusSatisfy;
 pub use types::MessageType;
