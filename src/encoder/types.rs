@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::slice_encoder::{
+use crate::encoder::{
     ArraySlot, DictEntrySlot, EncodeError, EncodeResult, Slot, Struct2Slot, VariantSlot,
     cursor::SliceCursor,
 };

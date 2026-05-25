@@ -1,7 +1,7 @@
 use crate::{
-    DBusError, IncomingBody, IncomingMessage, interface_is,
+    DBusError, DBusSerial, EncodedMessage, IncomingBody, IncomingMessage, interface_is,
     messages::org_freedesktop_dbus::{AddMatch, RemoveMatch},
-    sansio::DBusQueue,
+    sansio::OutgoingQueue,
     types::MessageType,
 };
 
@@ -24,35 +24,85 @@ where
 }
 
 impl<T> Subscription<T> {
-    fn unsubscribe(&mut self, queue: &mut DBusQueue) {
+    fn unsubscribe<Q, B>(
+        &mut self,
+        serial: &mut DBusSerial,
+        queue: &mut Q,
+        buf: B,
+    ) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue<Message = EncodedMessage<B>>,
+        B: AsMut<[u8]> + AsRef<[u8]>,
+    {
         let SubscriptionState::Subscribed(path) = core::mem::take(&mut self.state) else {
-            return;
+            return Ok(());
         };
 
-        let message = RemoveMatch::build(path);
-        queue.push_back(message);
+        let rule = format!(
+            "type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='{path}'",
+        );
+        encode_and_queue(serial, queue, buf, &RemoveMatch::new_from_rule(&rule))?;
+        Ok(())
     }
 
-    fn subscribe(&mut self, sender: &str, path: String, queue: &mut DBusQueue) {
-        let message = AddMatch::build(sender, &path);
-        queue.push_back(message);
+    fn subscribe<Q, B>(
+        &mut self,
+        sender: &str,
+        path: String,
+        serial: &mut DBusSerial,
+        queue: &mut Q,
+        buf: B,
+    ) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue<Message = EncodedMessage<B>>,
+        B: AsMut<[u8]> + AsRef<[u8]>,
+    {
+        let rule = format!(
+            "type='signal',sender='{sender}',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='{path}'",
+        );
+        encode_and_queue(serial, queue, buf, &AddMatch::new_from_rule(&rule))?;
         self.state = SubscriptionState::Subscribed(path);
+        Ok(())
     }
 
     /// Sends a "subscribe" request
-    pub fn start(
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if encoding fails or the queue rejects a message.
+    pub fn start<Q, B>(
         &mut self,
         sender: impl AsRef<str>,
         path: impl Into<String>,
-        queue: &mut DBusQueue,
-    ) {
-        self.unsubscribe(queue);
-        self.subscribe(sender.as_ref(), path.into(), queue);
+        serial: &mut DBusSerial,
+        queue: &mut Q,
+        unsubscribe_buf: B,
+        subscribe_buf: B,
+    ) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue<Message = EncodedMessage<B>>,
+        B: AsMut<[u8]> + AsRef<[u8]>,
+    {
+        self.unsubscribe(serial, queue, unsubscribe_buf)?;
+        self.subscribe(sender.as_ref(), path.into(), serial, queue, subscribe_buf)
     }
 
     /// Unsubscribes and resets internal state
-    pub fn reset(&mut self, queue: &mut DBusQueue) {
-        self.unsubscribe(queue);
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if encoding fails or the queue rejects the unsubscribe message.
+    pub fn reset<Q, B>(
+        &mut self,
+        serial: &mut DBusSerial,
+        queue: &mut Q,
+        buf: B,
+    ) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue<Message = EncodedMessage<B>>,
+        B: AsMut<[u8]> + AsRef<[u8]>,
+    {
+        self.unsubscribe(serial, queue, buf)
     }
 
     fn try_process(&self, message: IncomingMessage<'_>) -> Result<T, Box<dyn core::error::Error>> {
@@ -101,4 +151,26 @@ impl<T> Subscription<T> {
             state: SubscriptionState::None,
         }
     }
+}
+
+fn encode_and_queue<Q, B, M>(
+    serial: &mut DBusSerial,
+    queue: &mut Q,
+    mut buf: B,
+    message: &M,
+) -> Result<u32, DBusError>
+where
+    Q: OutgoingQueue<Message = EncodedMessage<B>>,
+    B: AsMut<[u8]> + AsRef<[u8]>,
+    M: crate::EncodeMessage,
+{
+    let next_serial = serial.current();
+    let len = message.encode_message(buf.as_mut())?;
+    let mut message = EncodedMessage::new(buf, len);
+    message.set_serial(next_serial)?;
+    queue
+        .push(message)
+        .map_err(|_| DBusError::OutgoingQueueRejected)?;
+    serial.advance();
+    Ok(next_serial)
 }

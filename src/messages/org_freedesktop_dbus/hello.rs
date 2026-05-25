@@ -1,20 +1,19 @@
-use crate::OutgoingMessage;
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder};
 
 /// Represents a starting "hello" message that is sent to `DBus`
 pub struct Hello;
 
-impl Hello {
-    /// Constructor
-    pub fn build() -> OutgoingMessage {
-        OutgoingMessage::MethodCall {
-            serial: 0,
-            path: String::from("/org/freedesktop/DBus"),
-            member: String::from("Hello"),
-            interface: Some(String::from("org.freedesktop.DBus")),
-            destination: Some(String::from("org.freedesktop.DBus")),
-            sender: None,
-            unix_fds: None,
-            body: vec![],
-        }
+impl EncodeMessage for Hello {
+    fn encoded_capacity(&self) -> usize {
+        256
+    }
+
+    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, 0)?;
+        encoder.set_path("/org/freedesktop/DBus")?;
+        encoder.set_member("Hello")?;
+        encoder.set_interface("org.freedesktop.DBus")?;
+        encoder.set_destination("org.freedesktop.DBus")?;
+        encoder.finish()
     }
 }

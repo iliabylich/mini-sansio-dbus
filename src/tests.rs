@@ -1,6 +1,7 @@
 use crate::{
-    Array, DBusError, DictEntry, IncomingValue, MessageType, ObjectPath, Signature,
-    SliceMessageEncoder, Str, Struct2, UnixFd, Variant,
+    Array, DBusError, DictEntry, EncodeMessage, IncomingValue, MessageType, ObjectPath, Signature,
+    SliceMessageEncoder, Str, Struct2, UnixFd, Variant, VariantSlot,
+    messages::org_freedesktop_dbus::SetProperty,
 };
 
 const MESSAGE_BLOB: &[u8] = &[
@@ -22,7 +23,7 @@ const MESSAGE_BLOB: &[u8] = &[
 ];
 
 #[test]
-fn slice_encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::EncodeError> {
+fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), crate::EncodeError> {
     let mut buf = vec![0; 512];
     let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 42)?;
     encoder.set_path("/org/example/Object")?;
@@ -166,6 +167,97 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
         panic!("expected variant value");
     };
     assert!(matches!(variant.materialize()?, IncomingValue::Int32(-9)));
+    assert!(body.try_next()?.is_none());
+
+    Ok(())
+}
+
+#[test]
+fn set_property_encodes_string_variant() -> Result<(), DBusError> {
+    let message = SetProperty::<Str, _>::new(
+        "org.example.Service",
+        "/org/example/Object",
+        "org.example.Interface",
+        "Name",
+        16,
+        |mut variant: VariantSlot<'_, '_, Str>| variant.payload_slot()?.write("online"),
+    );
+    let mut buf = vec![0; message.encoded_capacity()];
+    let len = message.encode_message(&mut buf)?;
+    let decoded = crate::IncomingMessage::new(&buf[..len])?;
+
+    assert_eq!(decoded.message_type, MessageType::MethodCall);
+    assert_eq!(decoded.serial, 0);
+    assert_eq!(decoded.destination, Some("org.example.Service"));
+    assert_eq!(decoded.path, Some("/org/example/Object"));
+    assert_eq!(decoded.interface, Some("org.freedesktop.DBus.Properties"));
+    assert_eq!(decoded.member, Some("Set"));
+    assert_eq!(decoded.signature, Some("ssv"));
+
+    let mut body = decoded.body.ok_or(DBusError::MalformedBody)?;
+    assert!(matches!(
+        body.try_next()?,
+        Some(IncomingValue::String("org.example.Interface"))
+    ));
+    assert!(matches!(
+        body.try_next()?,
+        Some(IncomingValue::String("Name"))
+    ));
+    let Some(IncomingValue::Variant(variant)) = body.try_next()? else {
+        panic!("expected variant value");
+    };
+    assert!(matches!(
+        variant.materialize()?,
+        IncomingValue::String("online")
+    ));
+    assert!(body.try_next()?.is_none());
+
+    Ok(())
+}
+
+#[test]
+fn set_property_encodes_array_variant() -> Result<(), DBusError> {
+    let values = [1u32, 2, 3];
+    let message = SetProperty::<Array<u32>, _>::new(
+        "org.example.Service",
+        "/org/example/Object",
+        "org.example.Interface",
+        "Values",
+        16,
+        |mut variant: VariantSlot<'_, '_, Array<u32>>| {
+            let mut slot = variant.payload_slot()?;
+            for value in values {
+                slot.next_slot()?.write(value)?;
+            }
+            Ok(())
+        },
+    );
+    let mut buf = vec![0; message.encoded_capacity()];
+    let len = message.encode_message(&mut buf)?;
+    let decoded = crate::IncomingMessage::new(&buf[..len])?;
+
+    assert_eq!(decoded.signature, Some("ssv"));
+
+    let mut body = decoded.body.ok_or(DBusError::MalformedBody)?;
+    assert!(matches!(
+        body.try_next()?,
+        Some(IncomingValue::String("org.example.Interface"))
+    ));
+    assert!(matches!(
+        body.try_next()?,
+        Some(IncomingValue::String("Values"))
+    ));
+    let Some(IncomingValue::Variant(variant)) = body.try_next()? else {
+        panic!("expected variant value");
+    };
+    let IncomingValue::Array(array) = variant.materialize()? else {
+        panic!("expected array value");
+    };
+    let mut items = array.items_iter();
+    assert!(matches!(items.try_next()?, Some(IncomingValue::UInt32(1))));
+    assert!(matches!(items.try_next()?, Some(IncomingValue::UInt32(2))));
+    assert!(matches!(items.try_next()?, Some(IncomingValue::UInt32(3))));
+    assert!(items.try_next()?.is_none());
     assert!(body.try_next()?.is_none());
 
     Ok(())

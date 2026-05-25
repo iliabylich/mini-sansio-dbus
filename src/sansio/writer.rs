@@ -1,4 +1,4 @@
-use crate::{DBusError, DBusWants, sansio::DBusQueue};
+use crate::{DBusError, DBusWants, sansio::OutgoingQueue};
 
 pub(crate) struct DBusWriter {
     state: State,
@@ -19,10 +19,13 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn wants<'writebuf>(
+    pub(crate) fn wants<'writebuf, Q>(
         &self,
-        queue: &'writebuf DBusQueue,
-    ) -> Option<DBusWants<'static, 'writebuf>> {
+        queue: &'writebuf Q,
+    ) -> Option<DBusWants<'static, 'writebuf>>
+    where
+        Q: OutgoingQueue,
+    {
         match self.state {
             State::Writing { bytes_written } => {
                 let buf = queue.front()?;
@@ -36,11 +39,10 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn satisfy_write(
-        &mut self,
-        len: usize,
-        queue: &mut DBusQueue,
-    ) -> Result<(), DBusError> {
+    pub(crate) fn satisfy_write<Q>(&mut self, len: usize, queue: &mut Q) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue,
+    {
         match &mut self.state {
             State::Writing { bytes_written } => {
                 let buf = queue.front().ok_or(DBusError::InternalError)?;
@@ -50,7 +52,7 @@ impl DBusWriter {
 
                 if *bytes_written == buf.len() {
                     *bytes_written = 0;
-                    queue.pop_front();
+                    let _ = queue.pop_front();
                 }
             }
             State::Dead => {}

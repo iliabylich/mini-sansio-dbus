@@ -1,8 +1,62 @@
 use anyhow::{Context, Result, bail};
 use mini_sansio_dbus::{
-    DBusConnection, DBusQueue, DBusWants, IncomingMessage, MessageType, SliceMessageEncoder,
+    DBusConnection, DBusError, DBusSerial, DBusWants, EncodeMessage, EncodedMessage,
+    IncomingMessage, MessageType, OutgoingQueue, messages::org_freedesktop_dbus::Hello,
 };
-use std::os::fd::OwnedFd;
+use std::{collections::VecDeque, os::fd::OwnedFd};
+
+#[derive(Debug, Default)]
+struct ExampleQueue<M> {
+    messages: VecDeque<M>,
+}
+
+impl<M> ExampleQueue<M> {
+    fn new() -> Self {
+        Self {
+            messages: VecDeque::new(),
+        }
+    }
+}
+
+impl<M: AsRef<[u8]>> OutgoingQueue for ExampleQueue<M> {
+    type Message = M;
+    type Error = core::convert::Infallible;
+
+    fn push(&mut self, message: Self::Message) -> Result<(), Self::Error> {
+        self.messages.push_back(message);
+        Ok(())
+    }
+
+    fn front(&self) -> Option<&[u8]> {
+        self.messages.front().map(AsRef::as_ref)
+    }
+
+    fn pop_front(&mut self) -> Option<Self::Message> {
+        self.messages.pop_front()
+    }
+}
+
+fn encode_and_queue<Q, B, M>(
+    serial: &mut DBusSerial,
+    queue: &mut Q,
+    mut buf: B,
+    message: &M,
+) -> Result<u32, DBusError>
+where
+    Q: OutgoingQueue<Message = EncodedMessage<B>>,
+    B: AsMut<[u8]> + AsRef<[u8]>,
+    M: EncodeMessage,
+{
+    let next_serial = serial.current();
+    let len = message.encode_message(buf.as_mut())?;
+    let mut message = EncodedMessage::new(buf, len);
+    message.set_serial(next_serial)?;
+    queue
+        .push(message)
+        .map_err(|_| DBusError::OutgoingQueueRejected)?;
+    serial.advance();
+    Ok(next_serial)
+}
 
 struct BlockingDBus {
     conn: DBusConnection,
@@ -15,7 +69,11 @@ impl BlockingDBus {
         Ok(Self { conn, fd: None })
     }
 
-    fn socket(&mut self, queue: &mut DBusQueue, readerbuf: &mut Vec<u8>) -> Result<()> {
+    fn socket(
+        &mut self,
+        queue: &ExampleQueue<EncodedMessage<[u8; 256]>>,
+        readerbuf: &mut Vec<u8>,
+    ) -> Result<()> {
         log::info!("Getting a socket...");
         let wants = self
             .conn
@@ -33,7 +91,11 @@ impl BlockingDBus {
         Ok(())
     }
 
-    fn connect(&mut self, queue: &mut DBusQueue, readerbuf: &mut Vec<u8>) -> Result<()> {
+    fn connect(
+        &mut self,
+        queue: &ExampleQueue<EncodedMessage<[u8; 256]>>,
+        readerbuf: &mut Vec<u8>,
+    ) -> Result<()> {
         log::info!("Connecting...");
         let wants = self
             .conn
@@ -52,7 +114,7 @@ impl BlockingDBus {
 
     fn read_write<'a>(
         &mut self,
-        queue: &mut DBusQueue,
+        queue: &mut ExampleQueue<EncodedMessage<[u8; 256]>>,
         readerbuf: &'a mut Vec<u8>,
     ) -> Result<Option<IncomingMessage<'a>>> {
         let wants = self.conn.wants(queue, readerbuf).context("wants nothing")?;
@@ -88,12 +150,14 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = BlockingDBus::new()?;
-    let mut queue = DBusQueue::empty();
+    let mut serial = DBusSerial::new();
+    let hello_buf = [0; 256];
+    let mut queue = ExampleQueue::<EncodedMessage<[u8; 256]>>::new();
     let mut readerbuf = vec![];
-    enqueue_hello(&mut queue)?;
+    encode_and_queue(&mut serial, &mut queue, hello_buf, &Hello)?;
 
-    dbus.socket(&mut queue, &mut readerbuf)?;
-    dbus.connect(&mut queue, &mut readerbuf)?;
+    dbus.socket(&queue, &mut readerbuf)?;
+    dbus.connect(&queue, &mut readerbuf)?;
 
     loop {
         if let Some(message) = dbus.read_write(&mut queue, &mut readerbuf)? {
@@ -114,17 +178,4 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn enqueue_hello(queue: &mut DBusQueue) -> Result<u32> {
-    queue
-        .push_encoded(256, |serial, buf| {
-            let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, serial)?;
-            encoder.set_path("/org/freedesktop/DBus")?;
-            encoder.set_interface("org.freedesktop.DBus")?;
-            encoder.set_member("Hello")?;
-            encoder.set_destination("org.freedesktop.DBus")?;
-            encoder.finish()
-        })
-        .map_err(Into::into)
 }

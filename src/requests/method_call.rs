@@ -1,6 +1,6 @@
 use crate::{
-    DBusError, IncomingBody, IncomingMessage, OutgoingMessage, sansio::DBusQueue,
-    types::MessageType,
+    DBusError, DBusSerial, EncodeError, EncodedMessage, IncomingBody, IncomingMessage, MessageType,
+    sansio::OutgoingQueue,
 };
 use core::marker::PhantomData;
 
@@ -19,7 +19,7 @@ where
     Out: 'static,
     Data: Clone + 'static,
 {
-    send: &'static dyn Fn(In, Data) -> OutgoingMessage,
+    send: &'static dyn Fn(In, Data, &mut [u8]) -> Result<usize, EncodeError>,
     try_process:
         &'static dyn Fn(IncomingBody<'_>, Data) -> Result<Out, Box<dyn core::error::Error>>,
 }
@@ -47,7 +47,7 @@ where
     Out: 'static,
     Data: Clone + 'static,
 {
-    send: &'static dyn Fn(In, Data) -> OutgoingMessage,
+    send: &'static dyn Fn(In, Data, &mut [u8]) -> Result<usize, EncodeError>,
     try_process:
         &'static dyn Fn(IncomingBody<'_>, Data) -> Result<Out, Box<dyn core::error::Error>>,
     state: OneshotState,
@@ -61,14 +61,14 @@ where
     /// This is a builder pattern:
     ///
     /// ```ignore
-    /// let reply = MethodCall::new(|input, data| { /* build request */ })
+    /// let reply = MethodCall::new(|input, data, buf| { /* encode request */ })
     ///     .try_process(|body, data| { /* parse and validate response */ 42 } )
     ///     .with_data("any object here");
     /// assert_eq!(reply, 42);
     /// ```
     #[expect(clippy::new_ret_no_self)]
     pub const fn new(
-        send: &'static dyn Fn(In, Data) -> OutgoingMessage,
+        send: &'static dyn Fn(In, Data, &mut [u8]) -> Result<usize, EncodeError>,
     ) -> OneshotMethodCallBuilder<In, Out, Data, NeedsTryProcess> {
         OneshotMethodCallBuilder {
             send,
@@ -78,14 +78,35 @@ where
     }
 
     /// Writes a message to a given `queue`
-    pub fn send(&mut self, input: In, queue: &mut DBusQueue) {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request encoder fails.
+    pub fn send<Q, B>(
+        &mut self,
+        input: In,
+        serial: &mut DBusSerial,
+        queue: &mut Q,
+        mut buf: B,
+    ) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue<Message = EncodedMessage<B>>,
+        B: AsMut<[u8]> + AsRef<[u8]>,
+    {
         if !matches!(self.state, OneshotState::None) {
-            return;
+            return Ok(());
         }
 
-        let message: OutgoingMessage = (self.send)(input, self.data.clone());
-        let reply_serial = queue.push_back(message);
+        let reply_serial = serial.current();
+        let len = (self.send)(input, self.data.clone(), buf.as_mut())?;
+        let mut message = EncodedMessage::new(buf, len);
+        message.set_serial(reply_serial)?;
+        queue
+            .push(message)
+            .map_err(|_| DBusError::OutgoingQueueRejected)?;
+        serial.advance();
         self.state = OneshotState::WaitingForReply(reply_serial);
+        Ok(())
     }
 
     /// Tries to process incoming message
@@ -140,7 +161,7 @@ where
     Out: 'static,
     Data: Clone + 'static,
 {
-    send: &'static dyn Fn(In, Data) -> OutgoingMessage,
+    send: &'static dyn Fn(In, Data, &mut [u8]) -> Result<usize, EncodeError>,
     _state: PhantomData<S>,
     _out: PhantomData<Out>,
 }

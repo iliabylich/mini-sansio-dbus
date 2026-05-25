@@ -1,13 +1,71 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusQueue, DBusWants, IncomingMessage, IncomingValue, MessageType,
-    SliceMessageEncoder, Str, value_is,
+    DBusConnection, DBusError, DBusSerial, DBusWants, EncodeMessage, EncodedMessage,
+    IncomingMessage, IncomingValue, MessageType, OutgoingQueue,
+    messages::org_freedesktop_dbus::{GetProperty, Hello},
+    value_is,
 };
 use rustix::{
     event::{PollFd, PollFlags},
     io::Errno,
 };
-use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+use std::{
+    collections::VecDeque,
+    os::fd::{AsFd, BorrowedFd, OwnedFd},
+};
+
+#[derive(Debug, Default)]
+struct ExampleQueue<M> {
+    messages: VecDeque<M>,
+}
+
+impl<M> ExampleQueue<M> {
+    fn new() -> Self {
+        Self {
+            messages: VecDeque::new(),
+        }
+    }
+}
+
+impl<M: AsRef<[u8]>> OutgoingQueue for ExampleQueue<M> {
+    type Message = M;
+    type Error = core::convert::Infallible;
+
+    fn push(&mut self, message: Self::Message) -> Result<(), Self::Error> {
+        self.messages.push_back(message);
+        Ok(())
+    }
+
+    fn front(&self) -> Option<&[u8]> {
+        self.messages.front().map(AsRef::as_ref)
+    }
+
+    fn pop_front(&mut self) -> Option<Self::Message> {
+        self.messages.pop_front()
+    }
+}
+
+fn encode_and_queue<Q, B, M>(
+    serial: &mut DBusSerial,
+    queue: &mut Q,
+    mut buf: B,
+    message: &M,
+) -> Result<u32, DBusError>
+where
+    Q: OutgoingQueue<Message = EncodedMessage<B>>,
+    B: AsMut<[u8]> + AsRef<[u8]>,
+    M: EncodeMessage,
+{
+    let next_serial = serial.current();
+    let len = message.encode_message(buf.as_mut())?;
+    let mut message = EncodedMessage::new(buf, len);
+    message.set_serial(next_serial)?;
+    queue
+        .push(message)
+        .map_err(|_| DBusError::OutgoingQueueRejected)?;
+    serial.advance();
+    Ok(next_serial)
+}
 
 struct PollDBus {
     conn: DBusConnection,
@@ -24,7 +82,7 @@ impl PollDBus {
 
     fn process_until_blocked_or_message_received<'a>(
         &'a mut self,
-        queue: &mut DBusQueue,
+        queue: &mut ExampleQueue<EncodedMessage<[u8; 512]>>,
         readerbuf: &'a mut Vec<u8>,
     ) -> Result<ProcessResult<'a>> {
         loop {
@@ -148,9 +206,13 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = PollDBus::new()?;
-    let mut queue = DBusQueue::empty();
+    let mut serial = DBusSerial::new();
+    let hello_buf = [0; 512];
+    let primary_connection_path_buf = [0; 512];
+    let primary_connection_id_buf = [0; 512];
+    let mut queue = ExampleQueue::<EncodedMessage<[u8; 512]>>::new();
     let mut readerbuf = vec![];
-    enqueue_hello(&mut queue)?;
+    encode_and_queue(&mut serial, &mut queue, hello_buf, &Hello)?;
 
     let mut primary_connection_path_reply_serial = 0;
     let mut primary_connection_id_reply_serial = 0;
@@ -159,7 +221,9 @@ fn main() -> Result<()> {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
                 primary_connection_path_reply_serial = enqueue_get_property(
+                    &mut serial,
                     &mut queue,
+                    primary_connection_path_buf,
                     "org.freedesktop.NetworkManager",
                     "/org/freedesktop/NetworkManager",
                     "org.freedesktop.NetworkManager",
@@ -182,7 +246,9 @@ fn main() -> Result<()> {
                         log::info!("Primary connection: {primary_connection}");
 
                         primary_connection_id_reply_serial = enqueue_get_property(
+                            &mut serial,
                             &mut queue,
+                            primary_connection_id_buf,
                             "org.freedesktop.NetworkManager",
                             primary_connection,
                             "org.freedesktop.NetworkManager.Connection.Active",
@@ -209,39 +275,22 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn enqueue_hello(queue: &mut DBusQueue) -> Result<u32> {
-    queue
-        .push_encoded(256, |serial, buf| {
-            let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, serial)?;
-            encoder.set_path("/org/freedesktop/DBus")?;
-            encoder.set_interface("org.freedesktop.DBus")?;
-            encoder.set_member("Hello")?;
-            encoder.set_destination("org.freedesktop.DBus")?;
-            encoder.finish()
-        })
-        .map_err(Into::into)
-}
-
 fn enqueue_get_property(
-    queue: &mut DBusQueue,
+    serial: &mut DBusSerial,
+    queue: &mut ExampleQueue<EncodedMessage<[u8; 512]>>,
+    buf: [u8; 512],
     destination: &str,
     path: &str,
     interface: &str,
     property: &str,
 ) -> Result<u32> {
-    queue
-        .push_encoded(512, |serial, buf| {
-            let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, serial)?;
-            encoder.set_path(path)?;
-            encoder.set_interface("org.freedesktop.DBus.Properties")?;
-            encoder.set_member("Get")?;
-            encoder.set_destination(destination)?;
-            encoder.set_body_signature("ss")?;
-            encoder.next_body_slot::<Str>()?.write(interface)?;
-            encoder.next_body_slot::<Str>()?.write(property)?;
-            encoder.finish()
-        })
-        .map_err(Into::into)
+    encode_and_queue(
+        serial,
+        queue,
+        buf,
+        &GetProperty::new(destination, path, interface, property),
+    )
+    .map_err(Into::into)
 }
 
 fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {

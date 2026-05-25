@@ -1,27 +1,31 @@
-use crate::{OutgoingMessage, OutgoingValue};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
 
 /// Represents a request to subscribe to something in `DBus`
-pub struct AddMatch;
+pub struct AddMatch<'a> {
+    rule: &'a str,
+}
 
-impl AddMatch {
-    /// constructor
-    pub fn build(sender: &str, path: &str) -> OutgoingMessage {
-        Self::build_from_rule(format!(
-            "type='signal',sender='{sender}',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='{path}'"
-        ))
+impl<'a> AddMatch<'a> {
+    /// Low-level constructor for the slice-encoded message.
+    #[must_use]
+    pub const fn new_from_rule(rule: &'a str) -> Self {
+        Self { rule }
+    }
+}
+
+impl EncodeMessage for AddMatch<'_> {
+    fn encoded_capacity(&self) -> usize {
+        256usize.saturating_add(self.rule.len())
     }
 
-    /// low-level constructor
-    pub fn build_from_rule(rule: String) -> OutgoingMessage {
-        OutgoingMessage::MethodCall {
-            serial: 0,
-            path: String::from("/org/freedesktop/DBus"),
-            member: String::from("AddMatch"),
-            interface: Some(String::from("org.freedesktop.DBus")),
-            destination: Some(String::from("org.freedesktop.DBus")),
-            sender: None,
-            unix_fds: None,
-            body: vec![OutgoingValue::String(rule)],
-        }
+    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, 0)?;
+        encoder.set_path("/org/freedesktop/DBus")?;
+        encoder.set_member("AddMatch")?;
+        encoder.set_interface("org.freedesktop.DBus")?;
+        encoder.set_destination("org.freedesktop.DBus")?;
+        encoder.set_body_signature("s")?;
+        encoder.next_body_slot::<Str>()?.write(self.rule)?;
+        encoder.finish()
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     MessageType,
-    slice_encoder::{
+    encoder::{
         EncodeError, EncodeResult,
         cursor::SliceCursor,
         types::{DbusType, write_signature, write_string_like},

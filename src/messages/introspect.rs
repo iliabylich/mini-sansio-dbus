@@ -1,6 +1,6 @@
 use crate::{
-    DBusError, MessageType, OutgoingMessage, OutgoingValue, incoming::IncomingMessage,
-    interface_is, member_is, path_is,
+    DBusError, EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str,
+    incoming::IncomingMessage, interface_is, member_is, path_is,
 };
 
 /// Low-level introspection request received from `DBus`
@@ -47,22 +47,37 @@ impl TryFrom<IncomingMessage<'_>> for IntrospectRequest {
 
 /// Low-level introspection response to send to `DBus`
 #[derive(Debug)]
-pub struct IntrospectResponse;
+pub struct IntrospectResponse<'a> {
+    reply_serial: u32,
+    destination: &'a str,
+    xml: &'a str,
+}
 
-impl IntrospectResponse {
-    /// constructor
-    pub fn build(
-        reply_serial: u32,
-        destination: impl Into<String>,
-        xml: impl Into<String>,
-    ) -> OutgoingMessage {
-        OutgoingMessage::MethodReturn {
-            serial: 0,
+impl<'a> IntrospectResponse<'a> {
+    /// Constructor for the slice-encoded message.
+    #[must_use]
+    pub const fn new(reply_serial: u32, destination: &'a str, xml: &'a str) -> Self {
+        Self {
             reply_serial,
-            destination: Some(destination.into()),
-            sender: None,
-            unix_fds: None,
-            body: vec![OutgoingValue::String(xml.into())],
+            destination,
+            xml,
         }
+    }
+}
+
+impl EncodeMessage for IntrospectResponse<'_> {
+    fn encoded_capacity(&self) -> usize {
+        128usize
+            .saturating_add(self.destination.len())
+            .saturating_add(self.xml.len())
+    }
+
+    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn, 0)?;
+        encoder.set_reply_serial(self.reply_serial)?;
+        encoder.set_destination(self.destination)?;
+        encoder.set_body_signature("s")?;
+        encoder.next_body_slot::<Str>()?.write(self.xml)?;
+        encoder.finish()
     }
 }

@@ -17,14 +17,13 @@
 #![expect(clippy::arithmetic_side_effects)]
 #![doc = include_str!("../README.md")]
 
+mod encoder;
 mod error;
 mod incoming;
 mod introspectible_object_at;
-mod outgoing;
 mod requests;
 mod sansio;
 mod satisfy;
-mod slice_encoder;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -38,15 +37,14 @@ pub use incoming::{
 pub use introspectible_object_at::{IntrospectibleObjectAt, IntrospectibleObjectAtRequest};
 /// A module with many known message types
 pub mod messages;
-pub use error::DBusError;
-pub use outgoing::{OutgoingCompleteType, OutgoingMessage, OutgoingSignature, OutgoingValue};
-pub use requests::{IncompleteMethodCall, MethodCall, Subscription};
-pub use sansio::{DBusConnection, DBusQueue};
-pub use satisfy::DBusSatisfy;
-pub use slice_encoder::{
+pub use encoder::{
     Array, ArraySlot, DbusType, DictEntry, DictEntrySlot, EncodeError,
     MessageEncoder as SliceMessageEncoder, ObjectPath, Signature, Slot, Str, Struct2, Struct2Slot,
     UnixFd, Variant, VariantSlot, WriteValue,
 };
+pub use error::DBusError;
+pub use requests::{IncompleteMethodCall, MethodCall, Subscription};
+pub use sansio::{DBusConnection, DBusSerial, EncodeMessage, EncodedMessage, OutgoingQueue};
+pub use satisfy::DBusSatisfy;
 pub use types::MessageType;
 pub use wants::DBusWants;

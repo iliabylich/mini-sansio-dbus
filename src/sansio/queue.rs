@@ -1,77 +1,118 @@
-use crate::{OutgoingMessage, messages::org_freedesktop_dbus::Hello, outgoing::MessageEncoder};
-use std::collections::VecDeque;
+use crate::EncodeError;
 
-/// A queue of outgoing messages
-#[must_use]
-pub struct DBusQueue {
-    serial: u32,
-    q: VecDeque<Vec<u8>>,
-}
+/// A message that can encode itself into a caller-provided byte slice.
+pub trait EncodeMessage {
+    /// Returns the buffer size this message needs for encoding.
+    fn encoded_capacity(&self) -> usize;
 
-impl DBusQueue {
-    /// Constructs an empty queue
-    pub const fn empty() -> Self {
-        Self {
-            serial: 1,
-            q: VecDeque::new(),
-        }
-    }
-
-    /// Pushes starting "hello" message to the queue
-    pub fn push_hello(&mut self) {
-        self.push_back(Hello::build());
-    }
-
-    /// Constructs a queue with a "hello" message inside
-    pub fn new() -> Self {
-        let mut this = Self {
-            serial: 1,
-            q: VecDeque::new(),
-        };
-        this.push_back(Hello::build());
-        this
-    }
-
-    /// Pushes a new message
-    pub fn push_back(&mut self, message: impl Into<OutgoingMessage>) -> u32 {
-        let mut message: OutgoingMessage = message.into();
-        *message.serial_mut() = self.serial;
-        self.serial += 1;
-        let buf = MessageEncoder::encode(&message);
-        self.q.push_back(buf);
-        message.serial()
-    }
-
-    /// Pushes bytes produced by a caller-provided encoder.
+    /// Encodes this message without assigning a serial.
     ///
     /// # Errors
     ///
-    /// Returns the error produced by the provided encoder.
-    pub fn push_encoded<E>(
-        &mut self,
-        capacity: usize,
-        encode: impl FnOnce(u32, &mut [u8]) -> Result<usize, E>,
-    ) -> Result<u32, E> {
-        let serial = self.serial;
-        let mut buf = vec![0; capacity];
-        let len = encode(serial, &mut buf)?;
-        buf.truncate(len);
-        self.serial += 1;
-        self.q.push_back(buf);
-        Ok(serial)
+    /// Returns an error if the provided buffer cannot fit the encoded message.
+    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError>;
+}
+
+/// Allocates outgoing D-Bus message serials.
+#[derive(Debug, Clone, Copy)]
+#[must_use]
+pub struct DBusSerial {
+    next: u32,
+}
+
+impl DBusSerial {
+    /// Constructs a serial allocator starting at serial 1.
+    pub const fn new() -> Self {
+        Self { next: 1 }
     }
 
-    pub(crate) fn pop_front(&mut self) -> Option<Vec<u8>> {
-        self.q.pop_front()
+    /// Returns the serial that will be assigned to the next outgoing message.
+    #[must_use]
+    pub const fn current(&self) -> u32 {
+        self.next
     }
 
-    pub(crate) fn front(&self) -> Option<&[u8]> {
-        self.q.front().map(|v| &**v)
+    /// Marks the current serial as used.
+    pub fn advance(&mut self) {
+        self.next = self.next.checked_add(1).unwrap_or(1);
     }
 }
 
-impl Default for DBusQueue {
+impl Default for DBusSerial {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Encoded message bytes backed by caller-provided storage.
+#[derive(Debug, Clone, Copy)]
+#[must_use]
+pub struct EncodedMessage<B> {
+    buf: B,
+    len: usize,
+}
+
+impl<B> EncodedMessage<B> {
+    /// Constructs an encoded message from a buffer and encoded length.
+    pub const fn new(buf: B, len: usize) -> Self {
+        Self { buf, len }
+    }
+
+    /// Returns the encoded length.
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns whether the encoded message is empty.
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Returns the wrapped buffer.
+    pub fn into_inner(self) -> B {
+        self.buf
+    }
+}
+
+impl<B: AsMut<[u8]>> EncodedMessage<B> {
+    /// Writes the message serial into the encoded header.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the encoded message is too short to contain a D-Bus header.
+    pub fn set_serial(&mut self, serial: u32) -> Result<(), EncodeError> {
+        let Some(serial_slot) = self.buf.as_mut().get_mut(8..12) else {
+            return Err(EncodeError::BufferTooSmall);
+        };
+        serial_slot.copy_from_slice(&serial.to_le_bytes());
+        Ok(())
+    }
+}
+
+impl<B: AsRef<[u8]>> AsRef<[u8]> for EncodedMessage<B> {
+    fn as_ref(&self) -> &[u8] {
+        &self.buf.as_ref()[..self.len]
+    }
+}
+
+/// A caller-owned queue of encoded outgoing messages.
+pub trait OutgoingQueue {
+    /// Message storage type accepted by this queue.
+    type Message: AsRef<[u8]>;
+
+    /// Error returned when a message cannot be pushed into the queue.
+    type Error;
+
+    /// Pushes already encoded message bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the queue cannot accept another message.
+    fn push(&mut self, message: Self::Message) -> Result<(), Self::Error>;
+
+    /// Returns the first queued message.
+    fn front(&self) -> Option<&[u8]>;
+
+    /// Removes and returns the first queued message.
+    fn pop_front(&mut self) -> Option<Self::Message>;
 }

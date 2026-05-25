@@ -1,3 +1,5 @@
+use crate::EncodeError;
+
 /// A sum type of all possible error kinds
 #[derive(Debug)]
 #[expect(missing_docs)]
@@ -34,6 +36,8 @@ pub enum DBusError {
     NoSessionBusAddress,
     MalformedSessionBusAddress,
     DBusPathWithNull,
+    EncodeError(EncodeError),
+    OutgoingQueueRejected,
 }
 
 impl core::fmt::Display for DBusError {
@@ -43,3 +47,9 @@ impl core::fmt::Display for DBusError {
 }
 
 impl core::error::Error for DBusError {}
+
+impl From<EncodeError> for DBusError {
+    fn from(error: EncodeError) -> Self {
+        Self::EncodeError(error)
+    }
+}

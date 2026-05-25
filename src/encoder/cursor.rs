@@ -1,4 +1,4 @@
-use crate::slice_encoder::{EncodeError, EncodeResult};
+use crate::encoder::{EncodeError, EncodeResult};
 
 /// A cursor over the caller-provided output slice.
 #[derive(Debug)]

@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::slice_encoder::{
+use crate::encoder::{
     EncodeError, EncodeResult,
     cursor::SliceCursor,
     types::{DbusType, WriteValue},

@@ -1,24 +1,40 @@
-use crate::{OutgoingMessage, OutgoingValue};
+use crate::{EncodeError, EncodeMessage, MessageType, SliceMessageEncoder, Str};
 
 /// Represents a request to get all object properties
-pub struct GetAllProperties;
+pub struct GetAllProperties<'a> {
+    destination: &'a str,
+    path: &'a str,
+    interface: &'a str,
+}
 
-impl GetAllProperties {
-    /// constructor
-    pub fn build(
-        destination: impl Into<String>,
-        path: impl Into<String>,
-        interface: impl Into<String>,
-    ) -> OutgoingMessage {
-        OutgoingMessage::MethodCall {
-            serial: 0,
-            path: path.into(),
-            member: String::from("GetAll"),
-            interface: Some(String::from("org.freedesktop.DBus.Properties")),
-            destination: Some(destination.into()),
-            sender: None,
-            unix_fds: None,
-            body: vec![OutgoingValue::String(interface.into())],
+impl<'a> GetAllProperties<'a> {
+    /// Constructor for the slice-encoded message.
+    #[must_use]
+    pub const fn new(destination: &'a str, path: &'a str, interface: &'a str) -> Self {
+        Self {
+            destination,
+            path,
+            interface,
         }
+    }
+}
+
+impl EncodeMessage for GetAllProperties<'_> {
+    fn encoded_capacity(&self) -> usize {
+        256usize
+            .saturating_add(self.destination.len())
+            .saturating_add(self.path.len())
+            .saturating_add(self.interface.len())
+    }
+
+    fn encode_message(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, 0)?;
+        encoder.set_path(self.path)?;
+        encoder.set_member("GetAll")?;
+        encoder.set_interface("org.freedesktop.DBus.Properties")?;
+        encoder.set_destination(self.destination)?;
+        encoder.set_body_signature("s")?;
+        encoder.next_body_slot::<Str>()?.write(self.interface)?;
+        encoder.finish()
     }
 }

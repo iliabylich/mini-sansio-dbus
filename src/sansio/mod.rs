@@ -4,7 +4,7 @@ use reader::DBusReader;
 use rustix::net::SocketAddrUnix;
 use writer::DBusWriter;
 
-pub use queue::DBusQueue;
+pub use queue::{DBusSerial, EncodeMessage, EncodedMessage, OutgoingQueue};
 
 mod connector;
 mod queue;
@@ -80,11 +80,14 @@ impl DBusConnection {
     /// Returns what connection wants at the moment
     ///
     /// Returned value must be parsed and converted to a syscall of some sort
-    pub fn wants<'readbuf, 'writebuf>(
+    pub fn wants<'readbuf, 'writebuf, Q>(
         &mut self,
-        queue: &'writebuf mut DBusQueue,
+        queue: &'writebuf Q,
         readbuf: &'readbuf mut Vec<u8>,
-    ) -> Option<DBusWants<'readbuf, 'writebuf>> {
+    ) -> Option<DBusWants<'readbuf, 'writebuf>>
+    where
+        Q: OutgoingQueue,
+    {
         match &mut self.state {
             State::Connecting(connector) => connector.wants(readbuf),
             State::Ready { reader, writer } => match (reader.wants(readbuf), writer.wants(queue)) {
@@ -175,7 +178,10 @@ impl DBusConnection {
     /// # Errors
     ///
     /// Fails is operation is not the one that was last returned from `wants`
-    pub fn satisfy_write(&mut self, len: usize, queue: &mut DBusQueue) -> Result<(), DBusError> {
+    pub fn satisfy_write<Q>(&mut self, len: usize, queue: &mut Q) -> Result<(), DBusError>
+    where
+        Q: OutgoingQueue,
+    {
         match &mut self.state {
             State::Connecting(connector) => {
                 if let Some(seq) = connector.satisfy_write(len)? {
