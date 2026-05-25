@@ -43,7 +43,7 @@ const fn const_macro_message() -> Result<([u8; 128], usize), EncodeError> {
 
 #[test]
 fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), EncodeError> {
-    let mut buf = vec![0; 512];
+    let mut buf = [0; 512];
     let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 42)?;
     encoder.set_path("/org/example/Object")?;
     encoder.set_interface("org.example.Interface")?;
@@ -216,7 +216,7 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
 
 #[test]
 fn set_property_encodes_string_variant() -> Result<(), DBusError> {
-    let mut buf = vec![0; 512];
+    let mut buf = [0; 512];
     let len = SetProperty::encode(
         &mut buf,
         "org.example.Service",
@@ -263,7 +263,7 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
 
 #[test]
 fn set_property_encodes_array_variant() -> Result<(), DBusError> {
-    let mut buf = vec![0; 512];
+    let mut buf = [0; 512];
     let values = [1u32, 2, 3];
     let len = SetProperty::encode(
         &mut buf,

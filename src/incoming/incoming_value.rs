@@ -94,46 +94,48 @@ impl<'a> IncomingValue<'a> {
         w: &mut impl core::fmt::Write,
         indent: usize,
     ) -> Result<(), core::fmt::Error> {
-        let offset = " ".repeat(indent);
+        for _ in 0..indent {
+            write!(w, " ")?;
+        }
 
         match self {
-            Self::Byte(n) => writeln!(w, "{offset}u8: {n}")?,
-            Self::Bool(bool) => writeln!(w, "{offset}bool: {bool}")?,
-            Self::Int16(n) => writeln!(w, "{offset}i16: {n}")?,
-            Self::UInt16(n) => writeln!(w, "{offset}u16: {n}")?,
-            Self::Int32(n) => writeln!(w, "{offset}i32: {n}")?,
-            Self::UInt32(n) => writeln!(w, "{offset}u32: {n}")?,
-            Self::Int64(n) => writeln!(w, "{offset}i64: {n}")?,
-            Self::UInt64(n) => writeln!(w, "{offset}u64: {n}")?,
-            Self::Double(n) => writeln!(w, "{offset}double: {n}")?,
-            Self::UnixFD(n) => writeln!(w, "{offset}unixfd: {n}")?,
-            Self::String(s) => writeln!(w, "{offset}string: {s:?}")?,
-            Self::ObjectPath(path) => writeln!(w, "{offset}path: {path:?}")?,
-            Self::Signature(signature) => writeln!(w, "{offset}signature: {signature:?}")?,
+            Self::Byte(n) => writeln!(w, "u8: {n}")?,
+            Self::Bool(bool) => writeln!(w, "bool: {bool}")?,
+            Self::Int16(n) => writeln!(w, "i16: {n}")?,
+            Self::UInt16(n) => writeln!(w, "u16: {n}")?,
+            Self::Int32(n) => writeln!(w, "i32: {n}")?,
+            Self::UInt32(n) => writeln!(w, "u32: {n}")?,
+            Self::Int64(n) => writeln!(w, "i64: {n}")?,
+            Self::UInt64(n) => writeln!(w, "u64: {n}")?,
+            Self::Double(n) => writeln!(w, "double: {n}")?,
+            Self::UnixFD(n) => writeln!(w, "unixfd: {n}")?,
+            Self::String(s) => writeln!(w, "string: {s:?}")?,
+            Self::ObjectPath(path) => writeln!(w, "path: {path:?}")?,
+            Self::Signature(signature) => writeln!(w, "signature: {signature:?}")?,
             Self::Struct(struct_) => {
                 let mut iter = struct_.fields_iter().map_err(|_| core::fmt::Error)?;
-                writeln!(w, "{offset}struct:")?;
+                writeln!(w, "struct:")?;
                 while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
                     item.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
                 }
             }
             Self::Array(array) => {
                 let mut iter = array.items_iter();
-                writeln!(w, "{offset}array:")?;
+                writeln!(w, "array:")?;
                 while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
                     item.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
                 }
             }
             Self::DictEntry(pair) => {
-                writeln!(w, "{offset}dict:")?;
+                writeln!(w, "dict:")?;
                 let (key, value) = pair.key_value().map_err(|_| core::fmt::Error)?;
-                writeln!(w, "{offset}    key:")?;
+                writeln!(w, "    key:")?;
                 key.log(w, indent.checked_add(8).ok_or(core::fmt::Error)?)?;
-                writeln!(w, "{offset}    value:")?;
+                writeln!(w, "    value:")?;
                 value.log(w, indent.checked_add(8).ok_or(core::fmt::Error)?)?;
             }
             Self::Variant(variant) => {
-                writeln!(w, "{offset}variant:")?;
+                writeln!(w, "variant:")?;
                 let value = variant.materialize().map_err(|_| core::fmt::Error)?;
                 value.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
             }

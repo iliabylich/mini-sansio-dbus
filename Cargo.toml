@@ -8,7 +8,7 @@ authors = ["Ilya Bylich <ibylich@gmail.com>"]
 description = "Sans-IO implementation of DBus protocol"
 
 [dependencies]
-rustix = { version = "1", features = ["net"] }
+rustix = { version = "1", default-features = false, features = ["net"] }
 
 [dev-dependencies]
 pretty_env_logger = "0.5"
