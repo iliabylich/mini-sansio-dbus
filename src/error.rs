@@ -37,7 +37,7 @@ pub enum DBusError {
     MalformedSessionBusAddress,
     DBusPathWithNull,
     EncodeError(EncodeError),
-    OutgoingQueueRejected,
+    ReadBufIsTooShort,
 }
 
 impl core::fmt::Display for DBusError {

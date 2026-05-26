@@ -19,20 +19,27 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn wants<'w, 'q, Q>(&self, queue: &'w Q) -> Option<DBusWants<'static, 'w>>
+    pub(crate) fn wants<'w, 'q, Q>(
+        &self,
+        queue: &'w Q,
+    ) -> Result<Option<DBusWants<'static, 'w>>, DBusError>
     where
         Q: OutgoingQueue<'q>,
     {
         match self.state {
             State::Writing { bytes_written } => {
-                let buf = queue.peek()?;
-                let remainder = buf.get(bytes_written..)?;
-                Some(DBusWants::Write {
+                let Some(buf) = queue.peek() else {
+                    return Ok(None);
+                };
+                let Some(remainder) = buf.get(bytes_written..) else {
+                    return Err(DBusError::InternalError);
+                };
+                Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
-                })
+                }))
             }
-            State::Dead => None,
+            State::Dead => Ok(None),
         }
     }
 

@@ -63,7 +63,7 @@ impl BlockingDBus {
         log::info!("Getting a socket...");
         let wants = self
             .conn
-            .wants(queue, readerbuf)
+            .wants(queue, readerbuf)?
             .context("expected socket, got None")?;
         let DBusWants::Socket { domain, r#type, .. } = wants else {
             bail!("at first there must be connect, bug?");
@@ -81,7 +81,7 @@ impl BlockingDBus {
         log::info!("Connecting...");
         let wants = self
             .conn
-            .wants(queue, readerbuf)
+            .wants(queue, readerbuf)?
             .context("expected connect, got None")?;
         let DBusWants::Connect { addr, .. } = wants else {
             bail!("at first there must be connect, bug?");
@@ -99,7 +99,10 @@ impl BlockingDBus {
         queue: &mut ExampleQueue,
         readerbuf: &'a mut [u8],
     ) -> Result<Option<IncomingMessage<'a>>> {
-        let wants = self.conn.wants(queue, readerbuf).context("wants nothing")?;
+        let wants = self
+            .conn
+            .wants(queue, readerbuf)?
+            .context("wants nothing")?;
         log::info!("<< {wants:?}");
 
         match wants {

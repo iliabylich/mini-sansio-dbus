@@ -68,40 +68,46 @@ impl DBusConnection {
     /// Returns what connection wants at the moment
     ///
     /// Returned value must be parsed and converted to a syscall of some sort
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if given `readbuf` is too short
     pub fn wants<'r, 'w, 'q, Q>(
         &mut self,
         queue: &'w Q,
         readbuf: &'r mut [u8],
-    ) -> Option<DBusWants<'r, 'w>>
+    ) -> Result<Option<DBusWants<'r, 'w>>, DBusError>
     where
         Q: OutgoingQueue<'q>,
     {
         match &mut self.state {
             State::Connecting(connector) => connector.wants(readbuf),
-            State::Ready { reader, writer } => match (reader.wants(readbuf), writer.wants(queue)) {
-                (
-                    Some(DBusWants::Read {
-                        buf: readbuf,
-                        seq: readseq,
-                    }),
-                    Some(DBusWants::Write {
-                        buf: writebuf,
-                        seq: writeseq,
-                        ..
-                    }),
-                ) => Some(DBusWants::ReadWrite {
-                    readbuf,
-                    readseq,
-                    writebuf,
-                    writeseq,
-                }),
+            State::Ready { reader, writer } => {
+                match (reader.wants(readbuf)?, writer.wants(queue)?) {
+                    (
+                        Some(DBusWants::Read {
+                            buf: readbuf,
+                            seq: readseq,
+                        }),
+                        Some(DBusWants::Write {
+                            buf: writebuf,
+                            seq: writeseq,
+                            ..
+                        }),
+                    ) => Ok(Some(DBusWants::ReadWrite {
+                        readbuf,
+                        readseq,
+                        writebuf,
+                        writeseq,
+                    })),
 
-                (read, None) => read,
-                (None, write) => write,
-                other => {
-                    unreachable!("bug: DBus reader/writer never want {other:?}")
+                    (read, None) => Ok(read),
+                    (None, write) => Ok(write),
+                    other => {
+                        unreachable!("bug: DBus reader/writer never want {other:?}")
+                    }
                 }
-            },
+            }
         }
     }
 

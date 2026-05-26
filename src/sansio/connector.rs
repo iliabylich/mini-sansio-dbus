@@ -44,59 +44,72 @@ impl DBusConnector {
         }
     }
 
-    pub(crate) fn wants<'r>(&self, buf: &'r mut [u8]) -> Option<DBusWants<'r, 'static>> {
+    pub(crate) fn wants<'r>(
+        &self,
+        buf: &'r mut [u8],
+    ) -> Result<Option<DBusWants<'r, 'static>>, DBusError> {
         match self.state {
-            State::Socket => Some(DBusWants::Socket {
+            State::Socket => Ok(Some(DBusWants::Socket {
                 domain: AddressFamily::UNIX,
                 r#type: SocketType::STREAM,
                 seq: self.seq,
-            }),
+            })),
 
-            State::Connect => Some(DBusWants::Connect {
+            State::Connect => Ok(Some(DBusWants::Connect {
                 addr: self.addr.clone(),
                 seq: self.seq,
-            }),
+            })),
 
-            State::WriteZero => Some(DBusWants::Write {
+            State::WriteZero => Ok(Some(DBusWants::Write {
                 buf: ZERO,
                 seq: self.seq,
-            }),
+            })),
 
             State::WriteAuthExternal { bytes_written } => {
-                let remainder = AUTH_EXTERNAL.get(bytes_written..)?;
-                Some(DBusWants::Write {
+                let Some(remainder) = AUTH_EXTERNAL.get(bytes_written..) else {
+                    return Err(DBusError::InternalError);
+                };
+                Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
-                })
+                }))
             }
 
             State::ReadData { bytes_read } => {
-                let buf = buf.get_mut(bytes_read..DATA.len())?;
-                Some(DBusWants::Read { buf, seq: self.seq })
+                let Some(buf) = buf.get_mut(bytes_read..DATA.len()) else {
+                    return Err(DBusError::ReadBufIsTooShort);
+                };
+                Ok(Some(DBusWants::Read { buf, seq: self.seq }))
             }
 
             State::WriteData { bytes_written } => {
-                let remainder = DATA.get(bytes_written..)?;
-                Some(DBusWants::Write {
+                let Some(remainder) = DATA.get(bytes_written..) else {
+                    return Err(DBusError::InternalError);
+                };
+                Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
-                })
+                }))
             }
 
             State::ReadGUID { bytes_read } => {
-                let buf = buf.get_mut(bytes_read..GUID_LENGTH)?;
-                Some(DBusWants::Read { buf, seq: self.seq })
+                let Some(buf) = buf.get_mut(bytes_read..GUID_LENGTH) else {
+                    return Err(DBusError::ReadBufIsTooShort);
+                };
+                Ok(Some(DBusWants::Read { buf, seq: self.seq }))
             }
 
             State::WriteBegin { bytes_written } => {
-                let remainder = BEGIN.get(bytes_written..)?;
-                Some(DBusWants::Write {
+                let Some(remainder) = BEGIN.get(bytes_written..) else {
+                    return Err(DBusError::InternalError);
+                };
+                Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
-                })
+                }))
             }
 
-            State::Stopped => None,
+            State::Stopped => Ok(None),
         }
     }
 

@@ -78,7 +78,7 @@ impl PollDBus {
         loop {
             let wants = self
                 .conn
-                .wants(queue, readerbuf)
+                .wants(queue, readerbuf)?
                 .context("DBus wants nothing")?;
 
             match wants {
