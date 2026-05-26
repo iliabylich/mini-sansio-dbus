@@ -4,6 +4,12 @@ pub mod introspect;
 /// a module with built-in `DBus` request/response objects
 pub mod org_freedesktop_dbus;
 
+mod error_no_method;
+pub use error_no_method::ErrorNoMethod;
+
+mod empty_method_return;
+pub use empty_method_return::EmptyMethodReturn;
+
 /// compares given interfaces and returns an error if they are different
 #[macro_export]
 macro_rules! interface_is {
