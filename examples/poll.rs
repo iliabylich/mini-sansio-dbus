@@ -1,6 +1,6 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
+    DBusConnection, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
     OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
     value_is,
@@ -30,15 +30,17 @@ impl ExampleQueue {
 }
 
 impl OutgoingQueue<'_> for ExampleQueue {
+    type Error = core::convert::Infallible;
+
     fn next_serial(&mut self) -> u32 {
         let serial = self.serial.current();
         self.serial.advance();
         serial
     }
 
-    fn push(&mut self, message: &mut [u8]) -> Result<u32, DBusError> {
+    fn push(&mut self, message: &mut [u8]) -> Result<u32, Self::Error> {
         let serial = self.next_serial();
-        DBusSerial::write_to_message(message, serial)?;
+        DBusSerial::write_to_message(message, serial).unwrap();
         self.messages.push_back(message.to_vec());
         Ok(serial)
     }

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use mini_sansio_dbus::DBusSerial;
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusWants, IncomingMessage, MessageType, OutgoingQueue,
+    DBusConnection, DBusWants, IncomingMessage, MessageType, OutgoingQueue,
     messages::org_freedesktop_dbus::Hello,
 };
 use std::{collections::VecDeque, os::fd::OwnedFd};
@@ -22,15 +22,17 @@ impl ExampleQueue<'_> {
 }
 
 impl<'a> OutgoingQueue<'a> for ExampleQueue<'a> {
+    type Error = core::convert::Infallible;
+
     fn next_serial(&mut self) -> u32 {
         let serial = self.serial.current();
         self.serial.advance();
         serial
     }
 
-    fn push(&mut self, message: &'a mut [u8]) -> Result<u32, DBusError> {
+    fn push(&mut self, message: &'a mut [u8]) -> Result<u32, Self::Error> {
         let serial = self.next_serial();
-        DBusSerial::write_to_message(message, serial)?;
+        DBusSerial::write_to_message(message, serial).unwrap();
         self.messages.push_back(message);
         Ok(serial)
     }
