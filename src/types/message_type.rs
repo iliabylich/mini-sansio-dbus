@@ -4,12 +4,16 @@ use crate::DBusError;
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[must_use]
-#[expect(missing_docs)]
 pub enum MessageType {
+    /// Invalid message
     Invalid = 0,
+    /// Method call
     MethodCall = 1,
+    /// Method return
     MethodReturn = 2,
+    /// Error
     Error = 3,
+    /// Signal
     Signal = 4,
 }
 

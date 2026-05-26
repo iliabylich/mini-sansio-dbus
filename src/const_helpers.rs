@@ -193,3 +193,49 @@ const fn get_array_mut<const LEN: usize>(buf: &mut [u8; LEN], index: usize) -> O
     };
     Some(slot)
 }
+
+/// Defines a **constant** message.
+#[macro_export]
+macro_rules! def_constant_message {
+    ($name:ident, $size:expr) => {
+        impl $name {
+            /// Size of the encoded message.
+            pub const SIZE: usize = $size;
+
+            /// Actual encoded byte sequence.
+            pub const ENCODED: [u8; Self::SIZE] = {
+                let mut buf = [0; Self::SIZE];
+                let len = match Self::encode(&mut buf) {
+                    Ok(len) => len,
+                    Err(err) => panic!("{}", err.display()),
+                };
+                if len != Self::SIZE {
+                    $crate::panic_size_mismatch_message(Self::SIZE, len);
+                }
+                buf
+            };
+        }
+    };
+}
+
+#[doc(hidden)]
+#[expect(clippy::panic)]
+pub const fn panic_size_mismatch_message(declared: usize, got: usize) -> ! {
+    let message = ConstMessage::<96>::new();
+    let Some(message) = message.push_str("buffer is too long, can be just ") else {
+        panic!("failed to format buffer length error");
+    };
+    let Some(message) = message.push_usize(got) else {
+        panic!("failed to format buffer length error");
+    };
+    let Some(message) = message.push_str(" bytes, not ") else {
+        panic!("failed to format buffer length error");
+    };
+    let Some(message) = message.push_usize(declared) else {
+        panic!("failed to format buffer length error");
+    };
+    let Some(message) = message.as_str() else {
+        panic!("failed to format buffer length error");
+    };
+    panic!("{}", message)
+}

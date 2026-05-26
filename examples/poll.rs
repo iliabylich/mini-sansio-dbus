@@ -91,13 +91,13 @@ impl PollDBus {
                 }
                 DBusWants::Connect { addr, .. } => {
                     log::info!("starting connect()");
-                    rustix::net::connect(self.fd.as_ref().expect("no FD"), &addr)?;
+                    rustix::net::connect(self.fd.as_ref().context("no FD")?, &addr)?;
                     log::info!("connect() succeeded");
                     self.conn.satisfy_connect()?;
                     return Ok(ProcessResult::Connected);
                 }
                 DBusWants::Read { buf, .. } => {
-                    match rustix::io::read(self.fd.as_ref().expect("no FD"), buf) {
+                    match rustix::io::read(self.fd.as_ref().context("no FD")?, buf) {
                         Ok(len) => {
                             let message = self.conn.satisfy_read(len, readerbuf)?;
                             return Ok(ProcessResult::ReadWrite {
@@ -109,7 +109,7 @@ impl PollDBus {
                             return Ok(ProcessResult::ReadWrite {
                                 message: None,
                                 blocked_on: Some((
-                                    self.fd.as_ref().expect("no FD").as_fd(),
+                                    self.fd.as_ref().context("no FD")?.as_fd(),
                                     PollFlags::IN,
                                 )),
                             });
@@ -118,7 +118,7 @@ impl PollDBus {
                     }
                 }
                 DBusWants::Write { buf, .. } => {
-                    match rustix::io::write(self.fd.as_ref().expect("no FD"), buf) {
+                    match rustix::io::write(self.fd.as_ref().context("no FD")?, buf) {
                         Ok(len) => {
                             self.conn.satisfy_write(len, queue)?;
                         }
@@ -126,7 +126,7 @@ impl PollDBus {
                             return Ok(ProcessResult::ReadWrite {
                                 message: None,
                                 blocked_on: Some((
-                                    self.fd.as_ref().expect("no FD").as_fd(),
+                                    self.fd.as_ref().context("no FD")?.as_fd(),
                                     PollFlags::OUT,
                                 )),
                             });
@@ -139,8 +139,8 @@ impl PollDBus {
                 } => {
                     let mut blocked_on_write = false;
 
-                    let write_res = rustix::io::write(self.fd.as_ref().expect("no FD"), writebuf);
-                    let read_res = rustix::io::read(self.fd.as_ref().expect("no FD"), readbuf);
+                    let write_res = rustix::io::write(self.fd.as_ref().context("no FD")?, writebuf);
+                    let read_res = rustix::io::read(self.fd.as_ref().context("no FD")?, readbuf);
 
                     match write_res {
                         Ok(len) => {
@@ -157,7 +157,10 @@ impl PollDBus {
                             return Ok(ProcessResult::ReadWrite {
                                 message,
                                 blocked_on: if blocked_on_write {
-                                    Some((self.fd.as_ref().expect("no FD").as_fd(), PollFlags::OUT))
+                                    Some((
+                                        self.fd.as_ref().context("no FD")?.as_fd(),
+                                        PollFlags::OUT,
+                                    ))
                                 } else {
                                     None
                                 },
@@ -168,7 +171,7 @@ impl PollDBus {
                                 message: None,
                                 blocked_on: if blocked_on_write {
                                     Some((
-                                        self.fd.as_ref().expect("no FD").as_fd(),
+                                        self.fd.as_ref().context("no FD")?.as_fd(),
                                         PollFlags::IN | PollFlags::OUT,
                                     ))
                                 } else {

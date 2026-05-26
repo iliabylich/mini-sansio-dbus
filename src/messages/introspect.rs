@@ -5,11 +5,14 @@ use crate::{
 
 /// Low-level introspection request received from `DBus`
 #[derive(Debug)]
-#[expect(missing_docs)]
 pub struct IntrospectRequest<'a> {
+    /// Serial of the request
     pub serial: u32,
+    /// Destination of the request
     pub destination: &'a str,
+    /// Path of the request
     pub path: &'a str,
+    /// Sender of the request
     pub sender: &'a str,
 }
 

@@ -86,7 +86,7 @@ impl BlockingDBus {
         let DBusWants::Connect { addr, .. } = wants else {
             bail!("at first there must be connect, bug?");
         };
-        rustix::net::connect(self.fd.as_ref().expect("no FD"), &addr)?;
+        rustix::net::connect(self.fd.as_ref().context("no FD")?, &addr)?;
         self.conn.satisfy_connect()?;
 
         log::info!("connect() succeeded");
@@ -107,19 +107,19 @@ impl BlockingDBus {
 
         match wants {
             DBusWants::Write { buf, .. } => {
-                let len = rustix::io::write(self.fd.as_ref().expect("no FD"), buf)?;
+                let len = rustix::io::write(self.fd.as_ref().context("no FD")?, buf)?;
                 self.conn.satisfy_write(len, queue)?;
                 Ok(None)
             }
             DBusWants::Read { buf, .. } => {
-                let len = rustix::io::read(self.fd.as_ref().expect("no FD"), buf)?;
+                let len = rustix::io::read(self.fd.as_ref().context("no FD")?, buf)?;
                 self.conn.satisfy_read(len, readerbuf).map_err(Into::into)
             }
             DBusWants::ReadWrite {
                 readbuf, writebuf, ..
             } => {
-                let writelen = rustix::io::write(self.fd.as_ref().expect("no FD"), writebuf)?;
-                let readlen = rustix::io::read(self.fd.as_ref().expect("no FD"), readbuf)?;
+                let writelen = rustix::io::write(self.fd.as_ref().context("no FD")?, writebuf)?;
+                let readlen = rustix::io::read(self.fd.as_ref().context("no FD")?, readbuf)?;
 
                 self.conn.satisfy_write(writelen, queue)?;
                 self.conn

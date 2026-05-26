@@ -38,6 +38,7 @@ pub use incoming::{
 pub use introspectible_object_at::{IntrospectibleObjectAt, IntrospectibleObjectAtRequest};
 /// A module with many known message types
 pub mod messages;
+pub use const_helpers::panic_size_mismatch_message;
 pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
 pub use error::DBusError;
 pub use sansio::{DBusConnection, DBusSerial, OutgoingQueue};

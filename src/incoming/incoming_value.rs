@@ -7,24 +7,40 @@ use crate::{
 /// Represents an abstract received value
 #[derive(Debug)]
 #[must_use]
-#[expect(missing_docs)]
 pub enum IncomingValue<'a> {
+    /// A single byte number
     Byte(u8),
+    /// Boolean
     Bool(bool),
+    /// Signed 2-byte number
     Int16(i16),
+    /// Unsigned 2-byte number
     UInt16(u16),
+    /// Signed 4-byte number
     Int32(i32),
+    /// Unsigned 4-byte number
     UInt32(u32),
+    /// Signed 8-byte number
     Int64(i64),
+    /// Unsigned 8-byte number
     UInt64(u64),
+    /// Double precision float
     Double(f64),
+    /// UNIX file description
     UnixFD(u32),
+    /// String
     String(&'a str),
+    /// Object Path
     ObjectPath(&'a str),
+    /// Signature
     Signature(&'a str),
+    /// Struct
     Struct(IncomingStructValue<'a>),
+    /// Array
     Array(IncomingArrayValue<'a>),
+    /// Dict entry
     DictEntry(IncomingDictEntryValue<'a>),
+    /// Dynamic variant
     Variant(IncomingVariantValue<'a>),
 }
 

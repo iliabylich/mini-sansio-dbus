@@ -7,21 +7,32 @@ use crate::{
 /// Received message
 #[derive(Clone, Copy)]
 #[must_use]
-#[expect(missing_docs)]
 pub struct IncomingMessage<'a> {
+    /// Type
     pub message_type: MessageType,
+    /// Serial
     pub serial: u32,
 
+    /// Path
     pub path: Option<&'a str>,
+    /// Interface
     pub interface: Option<&'a str>,
+    /// Member
     pub member: Option<&'a str>,
+    /// `ErrorName`
     pub error_name: Option<&'a str>,
+    /// `ReplySerial`
     pub reply_serial: Option<u32>,
+    /// Destination
     pub destination: Option<&'a str>,
+    /// Sender
     pub sender: Option<&'a str>,
+    /// Signature
     pub signature: Option<&'a str>,
+    /// `UnixFDs`
     pub unix_fds: Option<u32>,
 
+    /// Message body
     pub body: Option<IncomingBody<'a>>,
 }
 

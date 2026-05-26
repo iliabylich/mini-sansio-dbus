@@ -85,23 +85,34 @@ impl IntrospectibleObjectAt {
 
 /// An incoming introspection request, must be handled by you
 #[derive(Debug)]
-#[expect(missing_docs)]
 pub enum IntrospectibleObjectAtRequest<'a> {
+    /// A request to introspect object at `/<path>`
     Introspect {
+        /// Path to introspect
         path: &'a str,
     },
 
+    /// Ping request
     Ping,
+    /// Get machine ID request
     GetMachineId,
 
+    /// A request to introspect individual property
     GetProperty {
+        /// Path of the object
         path: &'a str,
+        /// Interface of the object
         interface: &'a str,
+        /// Property name to introspect
         property_name: &'a str,
     },
+    /// A request to introspect all properties
     GetAllProperties {
+        /// Path of the object
         path: &'a str,
+        /// Interface of the object
         interface: &'a str,
     },
+    /// A request to set property. Not implemented because it makes no sense.
     SetProperty,
 }
