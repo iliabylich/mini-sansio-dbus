@@ -219,8 +219,8 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
     let mut buf = [0; 512];
     let len = SetProperty::encode(
         &mut buf,
-        "org.example.Service",
         "/org/example/Object",
+        "org.example.Service",
         "org.example.Interface",
         "Name",
         |encoder: &mut SliceMessageEncoder<'_>| {

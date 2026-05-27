@@ -21,6 +21,19 @@ pub(crate) const fn get_range_mut(buf: &mut [u8], start: usize, end: usize) -> O
     Some(head)
 }
 
+pub(crate) const fn get_range(buf: &[u8], start: usize, end: usize) -> Option<&[u8]> {
+    let Some((_, tail)) = buf.split_at_checked(start) else {
+        return None;
+    };
+    let Some(offset) = end.checked_sub(start) else {
+        return None;
+    };
+    let Some((head, _)) = tail.split_at_checked(offset) else {
+        return None;
+    };
+    Some(head)
+}
+
 pub(crate) const fn u32_from_usize(v: usize) -> Option<u32> {
     let bytes = v.to_le_bytes();
     let Some((b0, tail)) = bytes.split_first() else {

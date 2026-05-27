@@ -16,6 +16,44 @@ pub struct IntrospectRequest<'a> {
     pub sender: &'a str,
 }
 
+impl<'a> IntrospectRequest<'a> {
+    /// Tries to parse given `message` as `IntrospectRequest`
+    #[must_use]
+    pub fn try_parse(message: IncomingMessage<'a>) -> Option<Self> {
+        if message.message_type != MessageType::MethodCall {
+            return None;
+        }
+
+        let serial = message.serial;
+        let path = message.path?;
+        let member = message.member?;
+        let interface = message.interface?;
+        let destination = message.destination?;
+        let sender = message.sender?;
+
+        if message.body.is_some() {
+            return None;
+        }
+
+        if path != "/" {
+            return None;
+        }
+        if member != "Introspect" {
+            return None;
+        }
+        if interface != "org.freedesktop.DBus.Introspectable" {
+            return None;
+        }
+
+        Some(Self {
+            serial,
+            destination,
+            path,
+            sender,
+        })
+    }
+}
+
 impl<'a> TryFrom<IncomingMessage<'a>> for IntrospectRequest<'a> {
     type Error = DBusError;
 
