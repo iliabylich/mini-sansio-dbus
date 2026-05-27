@@ -11,8 +11,8 @@ impl GetAllProperties {
     /// Returns an error if message doesn't fit into given buffer.
     pub const fn encode(
         buf: &mut [u8],
-        path: &str,
         destination: &str,
+        path: &str,
         interface: &str,
     ) -> Result<usize, EncodeError> {
         let mut encoder = try_!(SliceMessageEncoder::new(buf, MessageType::MethodCall, 0));

@@ -11,8 +11,8 @@ impl GetProperty {
     /// Returns an error if message doesn't fit into given buffer.
     pub const fn encode(
         buf: &mut [u8],
-        path: &str,
         destination: &str,
+        path: &str,
         interface: &str,
         property: &str,
     ) -> Result<usize, EncodeError> {

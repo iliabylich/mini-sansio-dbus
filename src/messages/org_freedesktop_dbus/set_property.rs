@@ -11,8 +11,8 @@ impl SetProperty {
     /// Returns an error if message doesn't fit into given buffer.
     pub fn encode(
         buf: &mut [u8],
-        path: &str,
         destination: &str,
+        path: &str,
         interface: &str,
         property: &str,
         value: impl Fn(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,

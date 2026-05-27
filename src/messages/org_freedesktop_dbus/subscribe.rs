@@ -15,8 +15,8 @@ impl Subscribe {
     /// Returns an error if given buffer is too short.
     pub const fn encode(
         buf: &mut [u8],
-        path: Option<&str>,
         sender: Option<&str>,
+        path: Option<&str>,
         interface: Option<&str>,
         member: Option<&str>,
     ) -> Result<usize, EncodeError> {
