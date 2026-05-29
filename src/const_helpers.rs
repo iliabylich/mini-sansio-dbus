@@ -207,13 +207,19 @@ const fn get_array_mut<const LEN: usize>(buf: &mut [u8; LEN], index: usize) -> O
     Some(slot)
 }
 
-/// Defines a **constant** message.
+/// Constructs a static message encoded at compile time
 #[macro_export]
 macro_rules! def_constant_message {
-    ($name:ident, $size:expr) => {
+    (name = $name:ident, size = $size:expr, |$var:ident| => $eval:expr) => {
+        /// A static message
+        pub struct $name;
         impl $name {
             /// Size of the encoded message.
             pub const SIZE: usize = $size;
+
+            const fn encode($var: &mut [u8]) -> Result<usize, $crate::EncodeError> {
+                $eval
+            }
 
             /// Actual encoded byte sequence.
             pub const ENCODED: [u8; Self::SIZE] = {
@@ -227,6 +233,35 @@ macro_rules! def_constant_message {
                 }
                 buf
             };
+
+            /// Sends a static message to a given queue, without processing reply
+            pub fn send<'q, Q>(q: &mut Q) -> u32
+            where
+                Q: $crate::OutgoingQueue<'q>,
+            {
+                q.push(&Self::ENCODED)
+            }
+
+
+        }
+    };
+
+    (name = $name:ident, size = $size:expr, with-reply, |$var:ident| => $eval:expr) => {
+        $crate::def_constant_message!(name = $name, size = $size, |$var| => $eval);
+
+        impl $name {
+            pub fn send_and_prepare_for_reply<'q, Q, E>(
+                q: &mut Q,
+                e: E,
+            ) -> $crate::messaging::reply_handler::ReplyHandler<Self, E>
+            where
+                Self: $crate::messaging::reply_handler::HasReplyHandler,
+                Q: $crate::OutgoingQueue<'q>,
+                E: $crate::messaging::reply_handler::ReplyErrorHandler,
+            {
+                let serial = Self::send(q);
+                ReplyHandler::new(serial, Self, e)
+            }
         }
     };
 }

@@ -29,20 +29,21 @@ impl ExampleQueue {
     }
 }
 
-impl OutgoingQueue<'_> for ExampleQueue {
-    type Error = core::convert::Infallible;
-
+impl ExampleQueue {
     fn next_serial(&mut self) -> u32 {
         let serial = self.serial.current();
         self.serial.advance();
         serial
     }
+}
 
-    fn push(&mut self, message: &mut [u8]) -> Result<u32, Self::Error> {
+impl OutgoingQueue<'_> for ExampleQueue {
+    fn push(&mut self, message: &[u8]) -> u32 {
         let serial = self.next_serial();
-        DBusSerial::write_to_message(message, serial).unwrap();
+        let mut message = message.to_vec();
+        DBusSerial::write_to_message(&mut message, serial).unwrap();
         self.messages.push_back(message.to_vec());
-        Ok(serial)
+        serial
     }
 
     fn peek(&self) -> Option<&[u8]> {
@@ -207,7 +208,7 @@ fn main() -> Result<()> {
     let mut readerbuf = [0; 1_024];
     {
         let mut buf = Hello::ENCODED;
-        queue.push(&mut buf)?;
+        queue.push(&mut buf);
     }
 
     let mut primary_connection_path_reply_serial = 0;
@@ -279,7 +280,7 @@ fn enqueue_get_property(
 ) -> Result<u32> {
     let len = GetProperty::encode(buf, destination, path, interface, property)?;
     let buf = buf.as_mut().get_mut(..len).context("malformed buffer")?;
-    let serial = queue.push(buf)?;
+    let serial = queue.push(buf);
     Ok(serial)
 }
 

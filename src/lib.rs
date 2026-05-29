@@ -30,17 +30,20 @@ mod tests;
 mod types;
 mod wants;
 
+/// A module with many known message types
+pub mod messages;
+/// A module with helper types and traits to simplify messaging
+pub mod messaging;
+
+pub use const_helpers::panic_size_mismatch_message;
+pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
+pub use error::DBusError;
 pub use incoming::{
     IncomingArrayValue, IncomingArrayValueIter, IncomingBody, IncomingDictEntryValue,
     IncomingMessage, IncomingStructValue, IncomingStructValueIter, IncomingValue,
     IncomingVariantValue,
 };
 pub use introspectible_object_at::{IntrospectibleObjectAt, IntrospectibleObjectAtRequest};
-/// A module with many known message types
-pub mod messages;
-pub use const_helpers::panic_size_mismatch_message;
-pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
-pub use error::DBusError;
 pub use sansio::{DBusConnection, DBusSerial, OutgoingQueue};
 pub use satisfy::DBusSatisfy;
 pub use types::MessageType;
