@@ -2,7 +2,7 @@ use crate::{
     DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
     OutgoingQueue,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
-    messaging::{DBusEncode, reply_handler::HasReplyHandler},
+    messaging::reply_handler::HasReplyHandler,
     value_is,
 };
 use core::marker::PhantomData;
@@ -134,38 +134,27 @@ fn find_property_in_properties_changes_reply<'a>(
     Ok(None)
 }
 
-/// A helper struct to quickly subscribe-to and unsubscribe-from `PropertiesChanged` signal
-#[must_use]
-pub struct PropertySubscriber<'a> {
-    destination: Option<&'a str>,
-    path: &'a str,
-    interface: &'a str,
-}
-
-impl<'a> PropertySubscriber<'a> {
-    /// Constructor
-    pub const fn new(destination: Option<&'a str>, path: &'a str, interface: &'a str) -> Self {
-        Self {
-            destination,
-            path,
-            interface,
-        }
-    }
+/// A helper trait to start and stop `PropertiesChanged` subscription
+pub trait PropertiesChangedSubscription {
+    /// Destination
+    const DESTINATION: Conf<str, Self>;
+    /// Path
+    const PATH: Conf<str, Self>;
 
     /// Subscribes
     ///
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    pub fn subscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
+    fn start<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
     where
         Q: OutgoingQueue,
     {
         let buf = Subscribe::encode(
             buf,
-            self.destination,
-            Some(self.path),
-            Some(self.interface),
+            Some(Self::DESTINATION.resolve(self)),
+            Some(Self::PATH.resolve(self)),
+            Some("org.freedesktop.DBus.Properties"),
             Some("PropertiesChanged"),
         )?;
         Ok(q.push_raw_buf(buf))
@@ -176,15 +165,15 @@ impl<'a> PropertySubscriber<'a> {
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    pub fn unsubscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
+    fn stop<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
     where
         Q: OutgoingQueue,
     {
         let buf = Unsubscribe::encode(
             buf,
-            self.destination,
-            Some(self.path),
-            Some(self.interface),
+            Some(Self::DESTINATION.resolve(self)),
+            Some(Self::PATH.resolve(self)),
+            Some("org.freedesktop.DBus.Properties"),
             Some("PropertiesChanged"),
         )?;
         Ok(q.push_raw_buf(buf))
@@ -192,10 +181,7 @@ impl<'a> PropertySubscriber<'a> {
 }
 
 /// A trait representing a `GetProperty` call with a reply handler
-pub trait PropertyGet
-where
-    Self: Sized + DBusEncode,
-{
+pub trait PropertyGet {
     /// Output of the call
     type Output;
 
