@@ -1,4 +1,4 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, const_helpers::try_, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, const_helpers::t_err, dbus_body};
 
 /// Represents a request to get all object properties
 pub struct GetAllProperties;
@@ -15,11 +15,11 @@ impl GetAllProperties {
         path: &str,
         interface: &str,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = try_!(SliceMessageEncoder::new(buf, MessageType::MethodCall, 0));
-        try_!(encoder.set_path(path));
-        try_!(encoder.set_member("GetAll"));
-        try_!(encoder.set_interface("org.freedesktop.DBus.Properties"));
-        try_!(encoder.set_destination(destination));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodCall, 0));
+        t_err!(encoder.set_path(path));
+        t_err!(encoder.set_member("GetAll"));
+        t_err!(encoder.set_interface("org.freedesktop.DBus.Properties"));
+        t_err!(encoder.set_destination(destination));
         dbus_body!(encoder, {
             str(interface),
         });

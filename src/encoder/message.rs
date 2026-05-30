@@ -1,6 +1,6 @@
 use crate::{
     MessageType,
-    const_helpers::{try_, u8_from_usize, u32_from_usize},
+    const_helpers::{t_err, u8_from_usize, u32_from_usize},
     encoder::{EncodeError, EncodeResult, cursor::SliceCursor},
     types::HeaderFieldCode,
 };
@@ -32,13 +32,13 @@ impl<'buf> MessageEncoder<'buf> {
         serial: u32,
     ) -> EncodeResult<Self> {
         let mut cur = SliceCursor::new(buf);
-        try_!(cur.write_u8(b'l'));
-        try_!(cur.write_u8(message_type.into_u8()));
-        try_!(cur.write_u8(0));
-        try_!(cur.write_u8(1));
-        try_!(cur.write_u32(0));
-        try_!(cur.write_u32(serial));
-        try_!(cur.write_u32(0));
+        t_err!(cur.write_u8(b'l'));
+        t_err!(cur.write_u8(message_type.into_u8()));
+        t_err!(cur.write_u8(0));
+        t_err!(cur.write_u8(1));
+        t_err!(cur.write_u32(0));
+        t_err!(cur.write_u32(serial));
+        t_err!(cur.write_u32(0));
         Ok(Self {
             cur,
             header_fields_start: 16,
@@ -53,7 +53,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_path(&mut self, path: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Path, b'o', path)
     }
 
@@ -64,7 +64,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_interface(&mut self, interface: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Interface, b's', interface)
     }
 
@@ -75,7 +75,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_member(&mut self, member: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Member, b's', member)
     }
 
@@ -86,7 +86,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_error_name(&mut self, error_name: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::ErrorName, b's', error_name)
     }
 
@@ -97,7 +97,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_reply_serial(&mut self, reply_serial: u32) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_u32(&mut self.cur, HeaderFieldCode::ReplySerial, reply_serial)
     }
 
@@ -108,7 +108,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_destination(&mut self, destination: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_string(
             &mut self.cur,
             HeaderFieldCode::Destination,
@@ -124,7 +124,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_sender(&mut self, sender: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_string(&mut self.cur, HeaderFieldCode::Sender, b's', sender)
     }
 
@@ -135,7 +135,7 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_unix_fds(&mut self, unix_fds: u32) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         write_header_u32(&mut self.cur, HeaderFieldCode::UnixFds, unix_fds)
     }
 
@@ -146,14 +146,14 @@ impl<'buf> MessageEncoder<'buf> {
     /// Returns an error if the header is already closed, the output buffer is too small, or the
     /// encoded message would exceed a D-Bus length limit.
     pub const fn set_body_signature(&mut self, signature: &str) -> EncodeResult<()> {
-        try_!(self.ensure_header_open());
+        t_err!(self.ensure_header_open());
         if signature.is_empty() {
             return Ok(());
         }
-        try_!(self.cur.align(8));
-        try_!(self.cur.write_u8(HeaderFieldCode::Signature.into_u8()));
-        try_!(write_variant_signature(&mut self.cur, b'g'));
-        try_!(write_signature(&mut self.cur, signature));
+        t_err!(self.cur.align(8));
+        t_err!(self.cur.write_u8(HeaderFieldCode::Signature.into_u8()));
+        t_err!(write_variant_signature(&mut self.cur, b'g'));
+        t_err!(write_signature(&mut self.cur, signature));
         Ok(())
     }
 
@@ -174,55 +174,55 @@ impl<'buf> MessageEncoder<'buf> {
 
     #[doc(hidden)]
     pub const fn __dbus_write_bool(&mut self, value: bool) -> EncodeResult<()> {
-        try_!(self.cur.align(4));
+        t_err!(self.cur.align(4));
         self.cur.write_u32(value as u32)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_i16(&mut self, value: i16) -> EncodeResult<()> {
-        try_!(self.cur.align(2));
+        t_err!(self.cur.align(2));
         self.cur.write_i16(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_u16(&mut self, value: u16) -> EncodeResult<()> {
-        try_!(self.cur.align(2));
+        t_err!(self.cur.align(2));
         self.cur.write_u16(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_i32(&mut self, value: i32) -> EncodeResult<()> {
-        try_!(self.cur.align(4));
+        t_err!(self.cur.align(4));
         self.cur.write_i32(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_u32(&mut self, value: u32) -> EncodeResult<()> {
-        try_!(self.cur.align(4));
+        t_err!(self.cur.align(4));
         self.cur.write_u32(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_i64(&mut self, value: i64) -> EncodeResult<()> {
-        try_!(self.cur.align(8));
+        t_err!(self.cur.align(8));
         self.cur.write_i64(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_u64(&mut self, value: u64) -> EncodeResult<()> {
-        try_!(self.cur.align(8));
+        t_err!(self.cur.align(8));
         self.cur.write_u64(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_f64(&mut self, value: f64) -> EncodeResult<()> {
-        try_!(self.cur.align(8));
+        t_err!(self.cur.align(8));
         self.cur.write_f64(value)
     }
 
     #[doc(hidden)]
     pub const fn __dbus_write_unix_fd(&mut self, value: u32) -> EncodeResult<()> {
-        try_!(self.cur.align(4));
+        t_err!(self.cur.align(4));
         self.cur.write_u32(value)
     }
 
@@ -241,10 +241,10 @@ impl<'buf> MessageEncoder<'buf> {
         &mut self,
         item_alignment: usize,
     ) -> EncodeResult<__DbusArrayFrame> {
-        try_!(self.cur.align(4));
+        t_err!(self.cur.align(4));
         let len_pos = self.cur.pos();
-        try_!(self.cur.write_u32(0));
-        try_!(self.cur.align(item_alignment));
+        t_err!(self.cur.write_u32(0));
+        t_err!(self.cur.align(item_alignment));
         let data_start = self.cur.pos();
         Ok(__DbusArrayFrame {
             len_pos,
@@ -269,7 +269,7 @@ impl<'buf> MessageEncoder<'buf> {
     ///
     /// Returns an error if the header or body length cannot be finalized.
     pub const fn finish(mut self) -> EncodeResult<usize> {
-        try_!(self.ensure_body_started());
+        t_err!(self.ensure_body_started());
         let Some(body_start) = self.body_start else {
             return Err(EncodeError::BodySignatureIncomplete);
         };
@@ -281,7 +281,7 @@ impl<'buf> MessageEncoder<'buf> {
         let Some(body_len) = u32_from_usize(body_len) else {
             return Err(EncodeError::ContainerTooLong);
         };
-        try_!(self.cur.set_u32(4, body_len));
+        t_err!(self.cur.set_u32(4, body_len));
         Ok(self.cur.pos())
     }
 
@@ -301,8 +301,8 @@ impl<'buf> MessageEncoder<'buf> {
             let Some(header_fields_len) = u32_from_usize(header_fields_len) else {
                 return Err(EncodeError::ContainerTooLong);
             };
-            try_!(self.cur.set_u32(12, header_fields_len));
-            try_!(self.cur.align(8));
+            t_err!(self.cur.set_u32(12, header_fields_len));
+            t_err!(self.cur.align(8));
             self.body_start = Some(self.cur.pos());
         }
         Ok(())
@@ -315,10 +315,10 @@ const fn write_header_string(
     value_signature: u8,
     value: &str,
 ) -> EncodeResult<()> {
-    try_!(cur.align(8));
-    try_!(cur.write_u8(field.into_u8()));
-    try_!(write_variant_signature(cur, value_signature));
-    try_!(write_string_like(cur, value));
+    t_err!(cur.align(8));
+    t_err!(cur.write_u8(field.into_u8()));
+    t_err!(write_variant_signature(cur, value_signature));
+    t_err!(write_string_like(cur, value));
     Ok(())
 }
 
@@ -327,18 +327,18 @@ const fn write_header_u32(
     field: HeaderFieldCode,
     value: u32,
 ) -> EncodeResult<()> {
-    try_!(cur.align(8));
-    try_!(cur.write_u8(field.into_u8()));
-    try_!(write_variant_signature(cur, b'u'));
-    try_!(cur.align(4));
-    try_!(cur.write_u32(value));
+    t_err!(cur.align(8));
+    t_err!(cur.write_u8(field.into_u8()));
+    t_err!(write_variant_signature(cur, b'u'));
+    t_err!(cur.align(4));
+    t_err!(cur.write_u32(value));
     Ok(())
 }
 
 const fn write_variant_signature(cur: &mut SliceCursor<'_>, signature: u8) -> EncodeResult<()> {
-    try_!(cur.write_u8(1));
-    try_!(cur.write_u8(signature));
-    try_!(cur.write_u8(0));
+    t_err!(cur.write_u8(1));
+    t_err!(cur.write_u8(signature));
+    t_err!(cur.write_u8(0));
     Ok(())
 }
 
@@ -347,10 +347,10 @@ const fn write_string_like(cur: &mut SliceCursor<'_>, value: &str) -> EncodeResu
         return Err(EncodeError::ValueTooLong);
     };
 
-    try_!(cur.align(4));
-    try_!(cur.write_u32(len));
-    try_!(cur.write_bytes(value.as_bytes()));
-    try_!(cur.write_u8(0));
+    t_err!(cur.align(4));
+    t_err!(cur.write_u32(len));
+    t_err!(cur.write_bytes(value.as_bytes()));
+    t_err!(cur.write_u8(0));
     Ok(())
 }
 
@@ -359,8 +359,8 @@ const fn write_signature(cur: &mut SliceCursor<'_>, value: &str) -> EncodeResult
         return Err(EncodeError::ValueTooLong);
     };
 
-    try_!(cur.write_u8(len));
-    try_!(cur.write_bytes(value.as_bytes()));
-    try_!(cur.write_u8(0));
+    t_err!(cur.write_u8(len));
+    t_err!(cur.write_bytes(value.as_bytes()));
+    t_err!(cur.write_u8(0));
     Ok(())
 }

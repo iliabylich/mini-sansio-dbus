@@ -1,5 +1,5 @@
 use crate::{
-    const_helpers::{get_range_mut, try_},
+    const_helpers::{get_range_mut, t_err},
     encoder::{EncodeError, EncodeResult},
 };
 
@@ -21,7 +21,7 @@ impl<'buf> SliceCursor<'buf> {
 
     pub(crate) const fn align(&mut self, align: usize) -> EncodeResult<()> {
         while !self.pos.is_multiple_of(align) {
-            try_!(self.write_u8(0));
+            t_err!(self.write_u8(0));
         }
         Ok(())
     }

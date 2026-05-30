@@ -1,4 +1,4 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, const_helpers::try_, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, const_helpers::t_err, dbus_body};
 
 /// Represents a "no such method" error reply
 pub struct ErrorNoMethod;
@@ -14,14 +14,14 @@ impl ErrorNoMethod {
         destination: &str,
         reply_serial: u32,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = try_!(SliceMessageEncoder::new(
+        let mut encoder = t_err!(SliceMessageEncoder::new(
             buf,
             MessageType::Error,
             reply_serial
         ));
-        try_!(encoder.set_error_name("org.freedesktop.DBus.Error.UnknownMethod"));
-        try_!(encoder.set_destination(destination));
-        try_!(encoder.set_reply_serial(reply_serial));
+        t_err!(encoder.set_error_name("org.freedesktop.DBus.Error.UnknownMethod"));
+        t_err!(encoder.set_destination(destination));
+        t_err!(encoder.set_reply_serial(reply_serial));
         dbus_body!(encoder, { str("Unknown method") });
         encoder.finish()
     }

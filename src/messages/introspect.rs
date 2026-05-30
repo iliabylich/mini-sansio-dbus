@@ -1,5 +1,5 @@
 use crate::{
-    DBusError, EncodeError, MessageType, SliceMessageEncoder, const_helpers::try_, dbus_body,
+    DBusError, EncodeError, MessageType, SliceMessageEncoder, const_helpers::t_err, dbus_body,
     incoming::IncomingMessage, interface_is, member_is, path_is,
 };
 
@@ -101,9 +101,9 @@ impl IntrospectResponse {
         destination: &str,
         xml: &str,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = try_!(SliceMessageEncoder::new(buf, MessageType::MethodReturn, 0));
-        try_!(encoder.set_reply_serial(reply_serial));
-        try_!(encoder.set_destination(destination));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodReturn, 0));
+        t_err!(encoder.set_reply_serial(reply_serial));
+        t_err!(encoder.set_destination(destination));
         dbus_body!(encoder, {
             str(xml),
         });

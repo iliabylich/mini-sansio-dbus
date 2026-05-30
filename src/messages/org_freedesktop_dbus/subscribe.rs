@@ -1,6 +1,6 @@
 use crate::{
     EncodeError,
-    const_helpers::{get_range, try_},
+    const_helpers::{get_range, t_err},
     messages::org_freedesktop_dbus::{AddMatch, Rule},
 };
 
@@ -21,7 +21,7 @@ impl Subscribe {
         member: Option<&str>,
     ) -> Result<usize, EncodeError> {
         let mut rulebuf = [0; 1_024];
-        let rulelen = try_!(Rule::fmt(&mut rulebuf, sender, interface, path, member));
+        let rulelen = t_err!(Rule::fmt(&mut rulebuf, sender, interface, path, member));
         let Some(rule) = get_range(&rulebuf, 0, rulelen) else {
             return Err(EncodeError::BufferTooSmall);
         };
@@ -29,7 +29,7 @@ impl Subscribe {
             unreachable!();
         };
 
-        let len = try_!(AddMatch::encode(buf, rule));
+        let len = t_err!(AddMatch::encode(buf, rule));
         Ok(len)
     }
 }
