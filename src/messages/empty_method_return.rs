@@ -14,11 +14,7 @@ impl EmptyMethodReturn {
         destination: &str,
         reply_serial: u32,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(
-            buf,
-            MessageType::MethodReturn,
-            reply_serial
-        ));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodReturn));
         t_err!(encoder.set_destination(destination));
         t_err!(encoder.set_reply_serial(reply_serial));
         t_err!(encoder.set_body_signature(""));

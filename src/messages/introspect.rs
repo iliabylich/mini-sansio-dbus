@@ -101,7 +101,7 @@ impl IntrospectResponse {
         destination: &str,
         xml: &str,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodReturn, 0));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodReturn));
         t_err!(encoder.set_reply_serial(reply_serial));
         t_err!(encoder.set_destination(destination));
         dbus_body!(encoder, {

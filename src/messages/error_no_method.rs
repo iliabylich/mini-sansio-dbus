@@ -14,11 +14,7 @@ impl ErrorNoMethod {
         destination: &str,
         reply_serial: u32,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(
-            buf,
-            MessageType::Error,
-            reply_serial
-        ));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::Error));
         t_err!(encoder.set_error_name("org.freedesktop.DBus.Error.UnknownMethod"));
         t_err!(encoder.set_destination(destination));
         t_err!(encoder.set_reply_serial(reply_serial));

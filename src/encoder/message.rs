@@ -26,18 +26,14 @@ impl<'buf> MessageEncoder<'buf> {
     /// # Errors
     ///
     /// Returns an error if there's not enough space in the given `buf`.
-    pub const fn new(
-        buf: &'buf mut [u8],
-        message_type: MessageType,
-        serial: u32,
-    ) -> EncodeResult<Self> {
+    pub const fn new(buf: &'buf mut [u8], message_type: MessageType) -> EncodeResult<Self> {
         let mut cur = SliceCursor::new(buf);
         t_err!(cur.write_u8(b'l'));
         t_err!(cur.write_u8(message_type.into_u8()));
         t_err!(cur.write_u8(0));
         t_err!(cur.write_u8(1));
         t_err!(cur.write_u32(0));
-        t_err!(cur.write_u32(serial));
+        t_err!(cur.write_u32(0));
         t_err!(cur.write_u32(0));
         Ok(Self {
             cur,

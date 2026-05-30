@@ -10,7 +10,7 @@ impl RequestName {
     ///
     /// Returns an error if message doesn't fit into given buffer.
     pub const fn encode(buf: &mut [u8], name: &str) -> Result<usize, EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodCall, 0));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodCall));
         t_err!(encoder.set_path("/org/freedesktop/DBus"));
         t_err!(encoder.set_member("RequestName"));
         t_err!(encoder.set_interface("org.freedesktop.DBus"));

@@ -17,7 +17,7 @@ impl SetProperty {
         property: &str,
         value: impl Fn(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, 0)?;
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path(path)?;
         encoder.set_member("Set")?;
         encoder.set_interface("org.freedesktop.DBus.Properties")?;

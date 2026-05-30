@@ -16,7 +16,7 @@ impl GetProperty {
         interface: &str,
         property: &str,
     ) -> Result<usize, EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodCall, 0));
+        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodCall));
         t_err!(encoder.set_path(path));
         t_err!(encoder.set_member("Get"));
         t_err!(encoder.set_interface("org.freedesktop.DBus.Properties"));

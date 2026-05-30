@@ -9,7 +9,7 @@
 /// ```
 /// # use mini_sansio_dbus::{dbus_body, MessageType, SliceMessageEncoder};
 /// # fn encode(buf: &mut [u8]) -> Result<usize, mini_sansio_dbus::EncodeError> {
-/// let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall, 1)?;
+/// let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
 /// dbus_body!(encoder, {
 ///     str("hello"),
 ///     u32(42),

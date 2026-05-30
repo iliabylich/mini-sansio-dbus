@@ -4,7 +4,7 @@ use crate::{
 };
 
 const MESSAGE_BLOB: &[u8] = &[
-    108, 1, 0, 1, 156, 0, 0, 0, 42, 0, 0, 0, 174, 0, 0, 0, 1, 1, 111, 0, 19, 0, 0, 0, 47, 111, 114,
+    108, 1, 0, 1, 156, 0, 0, 0, 0, 0, 0, 0, 174, 0, 0, 0, 1, 1, 111, 0, 19, 0, 0, 0, 47, 111, 114,
     103, 47, 101, 120, 97, 109, 112, 108, 101, 47, 79, 98, 106, 101, 99, 116, 0, 0, 0, 0, 0, 2, 1,
     115, 0, 21, 0, 0, 0, 111, 114, 103, 46, 101, 120, 97, 109, 112, 108, 101, 46, 73, 110, 116,
     101, 114, 102, 97, 99, 101, 0, 0, 0, 3, 1, 115, 0, 8, 0, 0, 0, 65, 108, 108, 84, 121, 112, 101,
@@ -25,7 +25,7 @@ const CONST_MACRO_MESSAGE: Result<([u8; 128], usize), EncodeError> = const_macro
 
 const fn const_macro_message() -> Result<([u8; 128], usize), EncodeError> {
     let mut buf = [0; 128];
-    let mut encoder = match SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 7) {
+    let mut encoder = match SliceMessageEncoder::new(&mut buf, MessageType::MethodCall) {
         Ok(encoder) => encoder,
         Err(err) => return Err(err),
     };
@@ -44,7 +44,7 @@ const fn const_macro_message() -> Result<([u8; 128], usize), EncodeError> {
 #[test]
 fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), EncodeError> {
     let mut buf = [0; 512];
-    let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall, 42)?;
+    let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall)?;
     encoder.set_path("/org/example/Object")?;
     encoder.set_interface("org.example.Interface")?;
     encoder.set_member("AllTypes")?;
@@ -95,7 +95,7 @@ fn macro_encoder_can_run_in_const_context() -> Result<(), DBusError> {
     };
     let message = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
 
-    assert_eq!(message.serial, 7);
+    assert_eq!(message.serial, 0);
     assert_eq!(message.signature, Some("usaq"));
 
     let mut body = message.body.ok_or(DBusError::MalformedBody)?;
@@ -122,7 +122,7 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
     let decoded = IncomingMessage::new(MESSAGE_BLOB)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
-    assert_eq!(decoded.serial, 42);
+    assert_eq!(decoded.serial, 0);
     assert_eq!(decoded.destination, Some("org.example.Service"));
     assert_eq!(decoded.path, Some("/org/example/Object"));
     assert_eq!(decoded.interface, Some("org.example.Interface"));
