@@ -13,13 +13,13 @@ impl Unsubscribe {
     /// # Errors
     ///
     /// Returns an error if given buffer is too short.
-    pub const fn encode(
-        buf: &mut [u8],
+    pub const fn encode<'a>(
+        buf: &'a mut [u8],
         sender: Option<&str>,
         path: Option<&str>,
         interface: Option<&str>,
         member: Option<&str>,
-    ) -> Result<usize, EncodeError> {
+    ) -> Result<&'a [u8], EncodeError> {
         let mut rulebuf = [0; 1_024];
         let rulelen = t_err!(Rule::fmt(&mut rulebuf, sender, interface, path, member));
         let Some(rule) = get_range(&rulebuf, 0, rulelen) else {
@@ -29,7 +29,6 @@ impl Unsubscribe {
             unreachable!();
         };
 
-        let len = t_err!(RemoveMatch::encode(buf, rule));
-        Ok(len)
+        RemoveMatch::encode(buf, rule)
     }
 }

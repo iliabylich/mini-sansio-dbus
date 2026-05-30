@@ -226,7 +226,7 @@ struct GetPrimaryConnection;
 impl DBusEncode for GetPrimaryConnection {
     type Data = ();
 
-    fn encode((): Self::Data, buf: &mut [u8]) -> Result<usize, EncodeError> {
+    fn encode((): Self::Data, buf: &mut [u8]) -> Result<&[u8], EncodeError> {
         GetProperty::encode(
             buf,
             "org.freedesktop.NetworkManager",
@@ -253,8 +253,7 @@ fn enqueue_get_property(
     interface: &str,
     property: &str,
 ) -> Result<u32> {
-    let len = GetProperty::encode(buf, destination, path, interface, property)?;
-    let buf = buf.as_mut().get_mut(..len).context("malformed buffer")?;
+    let buf = GetProperty::encode(buf, destination, path, interface, property)?;
     let serial = queue.push_raw_buf(buf);
     Ok(serial)
 }

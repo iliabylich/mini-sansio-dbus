@@ -10,5 +10,5 @@ pub trait DBusEncode {
     /// # Errors
     ///
     /// May return an error if message doesn't fit into `buf`
-    fn encode(data: Self::Data, buf: &mut [u8]) -> Result<usize, EncodeError>;
+    fn encode(data: Self::Data, buf: &mut [u8]) -> Result<&[u8], EncodeError>;
 }

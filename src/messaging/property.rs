@@ -1,7 +1,6 @@
 use crate::{
     DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
     OutgoingQueue,
-    const_helpers::get_range_mut,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
     messaging::{DBusEncode, reply_handler::HasReplyHandler},
     value_is,
@@ -162,14 +161,13 @@ impl<'a> PropertySubscriber<'a> {
     where
         Q: OutgoingQueue,
     {
-        let len = Subscribe::encode(
+        let buf = Subscribe::encode(
             buf,
             self.destination,
             Some(self.path),
             Some(self.interface),
             Some("PropertiesChanged"),
         )?;
-        let buf = get_range_mut(buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
         Ok(q.push_raw_buf(buf))
     }
 
@@ -182,14 +180,13 @@ impl<'a> PropertySubscriber<'a> {
     where
         Q: OutgoingQueue,
     {
-        let len = Unsubscribe::encode(
+        let buf = Unsubscribe::encode(
             buf,
             self.destination,
             Some(self.path),
             Some(self.interface),
             Some("PropertiesChanged"),
         )?;
-        let buf = get_range_mut(buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
         Ok(q.push_raw_buf(buf))
     }
 }

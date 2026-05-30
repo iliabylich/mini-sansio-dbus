@@ -1,6 +1,5 @@
 use crate::{
     EncodeError,
-    const_helpers::get_range,
     messaging::{
         DBusEncode,
         reply_handler::{HasReplyHandler, ReplyErrorHandler, ReplyHandler},
@@ -72,8 +71,7 @@ pub trait OutgoingQueue {
         E: ReplyErrorHandler,
     {
         let mut buf = [0; N];
-        let len = M::encode(data, &mut buf)?;
-        let buf = get_range(&buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
+        let buf = M::encode(data, &mut buf)?;
         let serial = Self::push_raw_buf(self, buf);
         Ok(ReplyHandler::new(serial, message, errhandler))
     }
@@ -91,8 +89,7 @@ pub trait OutgoingQueue {
         M: DBusEncode,
     {
         let mut buf = [0; N];
-        let len = M::encode(data, &mut buf)?;
-        let buf = get_range(&buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
+        let buf = M::encode(data, &mut buf)?;
         let _serial = Self::push_raw_buf(self, buf);
         Ok(())
     }

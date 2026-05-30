@@ -217,7 +217,7 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
 #[test]
 fn set_property_encodes_string_variant() -> Result<(), DBusError> {
     let mut buf = [0; 512];
-    let len = SetProperty::encode(
+    let buf = SetProperty::encode(
         &mut buf,
         "org.example.Service",
         "/org/example/Object",
@@ -230,7 +230,7 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
             Ok(())
         },
     )?;
-    let decoded = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
+    let decoded = IncomingMessage::new(buf)?;
 
     assert_eq!(decoded.message_type, MessageType::MethodCall);
     assert_eq!(decoded.serial, 0);
@@ -265,7 +265,7 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
 fn set_property_encodes_array_variant() -> Result<(), DBusError> {
     let mut buf = [0; 512];
     let values = [1u32, 2, 3];
-    let len = SetProperty::encode(
+    let buf = SetProperty::encode(
         &mut buf,
         "org.example.Service",
         "/org/example/Object",
@@ -278,7 +278,7 @@ fn set_property_encodes_array_variant() -> Result<(), DBusError> {
             Ok(())
         },
     )?;
-    let decoded = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;
+    let decoded = IncomingMessage::new(buf)?;
 
     assert_eq!(decoded.signature, Some("ssv"));
 

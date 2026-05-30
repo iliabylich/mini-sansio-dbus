@@ -1,4 +1,6 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body_fragment};
+use crate::{
+    EncodeError, MessageType, SliceMessageEncoder, const_helpers::get_range, dbus_body_fragment,
+};
 
 /// Represents a request to set a single property on a given `DBus` object
 pub struct SetProperty;
@@ -9,14 +11,14 @@ impl SetProperty {
     /// # Errors
     ///
     /// Returns an error if message doesn't fit into given buffer.
-    pub fn encode(
-        buf: &mut [u8],
+    pub fn encode<'a>(
+        buf: &'a mut [u8],
         destination: &str,
         path: &str,
         interface: &str,
         property: &str,
         value: impl Fn(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,
-    ) -> Result<usize, EncodeError> {
+    ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path(path)?;
         encoder.set_member("Set")?;
@@ -30,6 +32,10 @@ impl SetProperty {
         });
         (value)(&mut encoder)?;
 
-        encoder.finish()
+        let len = encoder.finish()?;
+        let Some(buf) = get_range(buf, 0, len) else {
+            return Err(EncodeError::BufferTooSmall);
+        };
+        Ok(buf)
     }
 }

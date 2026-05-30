@@ -1,4 +1,7 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, const_helpers::t_err};
+use crate::{
+    EncodeError, MessageType, SliceMessageEncoder,
+    const_helpers::{get_range, t_err},
+};
 
 /// Represents an empty method return, with no body
 pub struct EmptyMethodReturn;
@@ -9,15 +12,19 @@ impl EmptyMethodReturn {
     /// # Errors
     ///
     /// Returns an error if given `buf` is too short
-    pub const fn encode(
-        buf: &mut [u8],
+    pub const fn encode<'a>(
+        buf: &'a mut [u8],
         destination: &str,
         reply_serial: u32,
-    ) -> Result<usize, EncodeError> {
+    ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodReturn));
         t_err!(encoder.set_destination(destination));
         t_err!(encoder.set_reply_serial(reply_serial));
         t_err!(encoder.set_body_signature(""));
-        encoder.finish()
+        let len = t_err!(encoder.finish());
+        let Some(buf) = get_range(buf, 0, len) else {
+            return Err(EncodeError::BufferTooSmall);
+        };
+        Ok(buf)
     }
 }
