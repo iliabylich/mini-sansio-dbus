@@ -4,7 +4,7 @@ use crate::{
     const_helpers::get_range_mut,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
     messaging::{
-        DBusSend,
+        DBusPush, StaticallyEncodedMessage,
         reply_handler::{HasReplyHandler, ReplyErrorHandler, ReplyHandler},
     },
     value_is,
@@ -203,7 +203,7 @@ impl<'a> PropertySubscriber<'a> {
 /// A trait representing a `GetProperty` call with a reply handler
 pub trait PropertyGet
 where
-    Self: Sized + DBusSend,
+    Self: Sized + DBusPush,
 {
     /// Output of the call
     type Output;
@@ -213,8 +213,10 @@ where
     /// # Errors
     ///
     /// Returns an error if a queue returns an error
-    fn send_and_prepare_for_reply<'q, Q, E>(
+    fn encode_push_and_prepare_for_reply<'q, Q, E>(
         self,
+        data: <Self as DBusPush>::Data,
+        buf: &'q mut [u8],
         q: &mut Q,
         e: E,
     ) -> Result<ReplyHandler<Self, E>, Self::Error>
@@ -222,8 +224,23 @@ where
         Q: OutgoingQueue<'q>,
         E: ReplyErrorHandler,
     {
-        let serial = Self::send(q)?;
+        let serial = Self::push(data, buf, q)?;
         Ok(ReplyHandler::new(serial, self, e))
+    }
+
+    /// Pushes encoded message to a given queue and returns a ready-to-use `ReplyHandler`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a queue returns an error
+    fn push_static_and_prepare_for_reply<'q, Q, E>(self, q: &mut Q, e: E) -> ReplyHandler<Self, E>
+    where
+        Q: OutgoingQueue<'q>,
+        E: ReplyErrorHandler,
+        Self: StaticallyEncodedMessage,
+    {
+        let serial = Self::push_static(q);
+        ReplyHandler::new(serial, self, e)
     }
 
     /// Maps returned `DBus` value to desired output

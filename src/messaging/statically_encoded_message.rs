@@ -1,18 +1,28 @@
-use crate::{OutgoingQueue, messaging::DBusSend};
+use crate::{OutgoingQueue, messaging::DBusPush};
 
 /// A common trait for all statically encoded `DBus` messages.
 pub trait StaticallyEncodedMessage {
     /// Byte representation
     const ENCODED: &'static [u8];
+
+    /// Shortcut helper to push a static message, it doesn't need data or buffer,
+    /// because it's pre-encoded at compile time.
+    fn push_static<'q, Q>(q: &mut Q) -> u32
+    where
+        Q: OutgoingQueue<'q>,
+    {
+        q.push(Self::ENCODED)
+    }
 }
 
-impl<T> DBusSend for T
+impl<T> DBusPush for T
 where
     T: StaticallyEncodedMessage,
 {
+    type Data = ();
     type Error = core::convert::Infallible;
 
-    fn send<'q, Q>(q: &mut Q) -> Result<u32, Self::Error>
+    fn push<'q, Q>((): (), _: &'q mut [u8], q: &mut Q) -> Result<u32, Self::Error>
     where
         Q: OutgoingQueue<'q>,
     {

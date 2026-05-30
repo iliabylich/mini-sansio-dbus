@@ -8,5 +8,5 @@ pub mod property;
 mod statically_encoded_message;
 pub use statically_encoded_message::StaticallyEncodedMessage;
 
-mod dbus_send;
-pub use dbus_send::DBusSend;
+mod dbus_push;
+pub use dbus_push::DBusPush;

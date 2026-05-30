@@ -4,8 +4,7 @@ use mini_sansio_dbus::{
     OutgoingQueue, encode_message,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
     messaging::{
-        DBusSend as _, StaticallyEncodedMessage, property::PropertyGet,
-        reply_handler::ReplyErrorHandler,
+        StaticallyEncodedMessage, property::PropertyGet, reply_handler::ReplyErrorHandler,
     },
     value_is,
 };
@@ -216,7 +215,7 @@ fn main() -> Result<()> {
     let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
-    let Ok(_) = Hello::send(&mut queue);
+    let _ = Hello::push_static(&mut queue);
 
     let mut primary_connection_path_reply_handler = None;
     let mut primary_connection_id_reply_serial = 0;
@@ -226,7 +225,7 @@ fn main() -> Result<()> {
             ProcessResult::Connected => {
                 primary_connection_path_reply_handler = Some(
                     GetPrimaryConnection
-                        .send_and_prepare_for_reply(&mut queue, DefaultErrorHandler)?,
+                        .push_static_and_prepare_for_reply(&mut queue, DefaultErrorHandler),
                 );
             }
             ProcessResult::ReadWrite {
