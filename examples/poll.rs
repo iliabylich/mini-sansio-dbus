@@ -1,9 +1,12 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
-    OutgoingQueue, def_static_property_get, encode_message,
+    DBusConnection, DBusError, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
+    OutgoingQueue, encode_message,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
-    messaging::{StaticallyEncodedMessage, static_property::PropertyGet},
+    messaging::{
+        DBusSend as _, StaticallyEncodedMessage, property::PropertyGet,
+        reply_handler::ReplyErrorHandler,
+    },
     value_is,
 };
 use rustix::{
@@ -15,7 +18,7 @@ use std::{
     os::fd::{AsFd, BorrowedFd, OwnedFd},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ExampleQueue {
     serial: DBusSerial,
     messages: VecDeque<Vec<u8>>,
@@ -53,6 +56,13 @@ impl OutgoingQueue<'_> for ExampleQueue {
 
     fn pop(&mut self) {
         self.messages.pop_front();
+    }
+}
+
+struct DefaultErrorHandler;
+impl ReplyErrorHandler for DefaultErrorHandler {
+    fn on_error(&self, message_type: MessageType, error_name: &str) {
+        log::error!("call failed: {message_type:?} - {error_name:?}")
     }
 }
 
@@ -203,26 +213,21 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = PollDBus::new()?;
-    let mut primary_connection_path_buf = [0; 512];
     let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
-    Hello::send(&mut queue);
+    let Ok(_) = Hello::send(&mut queue);
 
-    let mut primary_connection_path_reply_serial = 0;
+    let mut primary_connection_path_reply_handler = None;
     let mut primary_connection_id_reply_serial = 0;
 
     loop {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
-                primary_connection_path_reply_serial = enqueue_get_property(
-                    &mut queue,
-                    &mut primary_connection_path_buf,
-                    "org.freedesktop.NetworkManager",
-                    "/org/freedesktop/NetworkManager",
-                    "org.freedesktop.NetworkManager",
-                    "PrimaryConnection",
-                )?;
+                primary_connection_path_reply_handler = Some(
+                    GetPrimaryConnection
+                        .send_and_prepare_for_reply(&mut queue, DefaultErrorHandler)?,
+                );
             }
             ProcessResult::ReadWrite {
                 message,
@@ -233,17 +238,18 @@ fn main() -> Result<()> {
                     message.log(&mut buf)?;
                     eprintln!("{buf}");
 
-                    if let Some(primary_connection) = try_parse_primary_connection_path_reply(
-                        message,
-                        primary_connection_path_reply_serial,
-                    )? {
-                        log::info!("Primary connection: {primary_connection}");
+                    if let Some(primary_connection_path_reply_handler) =
+                        primary_connection_path_reply_handler.as_ref()
+                        && let Some(primary_connection_path) =
+                            primary_connection_path_reply_handler.handle(message)?
+                    {
+                        log::info!("Primary connection: {primary_connection_path}");
 
                         primary_connection_id_reply_serial = enqueue_get_property(
                             &mut queue,
                             &mut primary_connection_id_buf,
                             "org.freedesktop.NetworkManager",
-                            primary_connection,
+                            &primary_connection_path,
                             "org.freedesktop.NetworkManager.Connection.Active",
                             "Id",
                         )?;
@@ -268,7 +274,6 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
 struct GetPrimaryConnection;
 impl StaticallyEncodedMessage for GetPrimaryConnection {
     const ENCODED: &[u8] = &encode_message!(218, |buf| => GetProperty::encode(
@@ -287,18 +292,6 @@ impl PropertyGet for GetPrimaryConnection {
         Ok(value.to_string())
     }
 }
-// def_static_property_get!(
-//     name = GetPrimaryConnection,
-//     size = 218,
-//     destination = "org.freedesktop.NetworkManager",
-//     path = "/org/freedesktop/NetworkManager",
-//     interface = "org.freedesktop.NetworkManager",
-//     property = "PrimaryConnection",
-//     |value| => String {{
-//         value_is!(value, IncomingValue::ObjectPath(value));
-//         Ok(value.to_string())
-//     }}
-// );
 
 fn enqueue_get_property(
     queue: &mut ExampleQueue,
@@ -320,24 +313,6 @@ fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {
     ensure!(ready > 0);
     log::info!("poll() finished()");
     Ok(())
-}
-
-fn try_parse_primary_connection_path_reply<'a>(
-    message: IncomingMessage<'a>,
-    reply_serial: u32,
-) -> Result<Option<&'a str>> {
-    if message.message_type != MessageType::MethodReturn
-        || message.reply_serial != Some(reply_serial)
-    {
-        return Ok(None);
-    }
-
-    let mut body = message.body.context("no body")?;
-    let path = body.try_next()?.context("empty body")?;
-    value_is!(path, IncomingValue::Variant(path));
-    let path = path.materialize()?;
-    value_is!(path, IncomingValue::ObjectPath(path));
-    Ok(Some(path))
 }
 
 fn try_parse_primary_connection_id_reply<'a>(

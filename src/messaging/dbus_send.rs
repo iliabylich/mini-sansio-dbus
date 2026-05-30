@@ -6,6 +6,10 @@ pub trait DBusSend {
     type Error;
 
     /// Sends a static message to a given queue, without processing reply
+    ///
+    /// # Errors
+    ///
+    /// May return an implementation-specific error
     fn send<'q, Q>(q: &mut Q) -> Result<u32, Self::Error>
     where
         Q: OutgoingQueue<'q>;

@@ -1,12 +1,12 @@
 use anyhow::{Context, Result, bail};
+use mini_sansio_dbus::DBusSerial;
 use mini_sansio_dbus::{
     DBusConnection, DBusWants, IncomingMessage, MessageType, OutgoingQueue,
     messages::org_freedesktop_dbus::Hello, messaging::DBusSend as _,
 };
-use mini_sansio_dbus::{DBusSerial, messaging::StaticallyEncodedMessage};
 use std::{collections::VecDeque, os::fd::OwnedFd};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ExampleQueue {
     serial: DBusSerial,
     messages: VecDeque<Vec<u8>>,

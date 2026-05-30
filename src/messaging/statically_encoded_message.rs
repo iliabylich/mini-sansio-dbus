@@ -1,17 +1,9 @@
 use crate::{OutgoingQueue, messaging::DBusSend};
 
-/// A common trait for all statically encoded DBus messages.
+/// A common trait for all statically encoded `DBus` messages.
 pub trait StaticallyEncodedMessage {
     /// Byte representation
     const ENCODED: &'static [u8];
-
-    // /// Sends a static message to a given queue, without processing reply
-    // fn send<'q, Q>(q: &mut Q) -> u32
-    // where
-    //     Q: OutgoingQueue<'q>,
-    // {
-    //     q.push(&Self::ENCODED)
-    // }
 }
 
 impl<T> DBusSend for T
