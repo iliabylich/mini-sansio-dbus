@@ -1,9 +1,9 @@
 use anyhow::{Context, Result, bail};
-use mini_sansio_dbus::DBusSerial;
 use mini_sansio_dbus::{
     DBusConnection, DBusWants, IncomingMessage, MessageType, OutgoingQueue,
-    messages::org_freedesktop_dbus::Hello,
+    messages::org_freedesktop_dbus::Hello, messaging::DBusSend as _,
 };
+use mini_sansio_dbus::{DBusSerial, messaging::StaticallyEncodedMessage};
 use std::{collections::VecDeque, os::fd::OwnedFd};
 
 #[derive(Debug, Default)]
@@ -140,8 +140,8 @@ fn main() -> Result<()> {
     let mut dbus = BlockingDBus::new()?;
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
-    let mut hellobuf = const { Hello::ENCODED };
-    queue.push(&mut hellobuf);
+
+    let Ok(_) = Hello::send(&mut queue);
 
     dbus.socket(&queue, &mut readerbuf)?;
     dbus.connect(&queue, &mut readerbuf)?;

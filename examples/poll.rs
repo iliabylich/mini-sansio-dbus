@@ -1,8 +1,9 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
     DBusConnection, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
-    OutgoingQueue,
+    OutgoingQueue, def_static_property_get, encode_message,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
+    messaging::{StaticallyEncodedMessage, static_property::PropertyGet},
     value_is,
 };
 use rustix::{
@@ -206,10 +207,7 @@ fn main() -> Result<()> {
     let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
-    {
-        let mut buf = Hello::ENCODED;
-        queue.push(&mut buf);
-    }
+    Hello::send(&mut queue);
 
     let mut primary_connection_path_reply_serial = 0;
     let mut primary_connection_id_reply_serial = 0;
@@ -269,6 +267,38 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[derive(Default)]
+struct GetPrimaryConnection;
+impl StaticallyEncodedMessage for GetPrimaryConnection {
+    const ENCODED: &[u8] = &encode_message!(218, |buf| => GetProperty::encode(
+        buf,
+        "org.freedesktop.NetworkManager",
+        "/org/freedesktop/NetworkManager",
+        "org.freedesktop.NetworkManager",
+        "PrimaryConnection",
+    ));
+}
+impl PropertyGet for GetPrimaryConnection {
+    type Output = String;
+
+    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError> {
+        value_is!(value, IncomingValue::ObjectPath(value));
+        Ok(value.to_string())
+    }
+}
+// def_static_property_get!(
+//     name = GetPrimaryConnection,
+//     size = 218,
+//     destination = "org.freedesktop.NetworkManager",
+//     path = "/org/freedesktop/NetworkManager",
+//     interface = "org.freedesktop.NetworkManager",
+//     property = "PrimaryConnection",
+//     |value| => String {{
+//         value_is!(value, IncomingValue::ObjectPath(value));
+//         Ok(value.to_string())
+//     }}
+// );
 
 fn enqueue_get_property(
     queue: &mut ExampleQueue,

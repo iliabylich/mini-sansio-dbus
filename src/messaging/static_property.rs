@@ -1,4 +1,11 @@
-use crate::{DBusError, IncomingMessage, IncomingValue, MessageType, value_is};
+use crate::{
+    DBusError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
+    messaging::{
+        DBusSend, StaticallyEncodedMessage,
+        reply_handler::{HasReplyHandler, ReplyErrorHandler, ReplyHandler},
+    },
+    value_is,
+};
 
 /// A helper trait to handle signals on changing a single Property.
 pub trait StaticPropertyChangedSignalHandler {
@@ -117,6 +124,43 @@ macro_rules! def_static_unsubscribe_to_properties_changed {
             )
         );
     };
+}
+
+pub trait PropertyGet
+where
+    Self: HasReplyHandler + Sized + Default + DBusSend,
+{
+    type Output;
+
+    fn send_and_prepare_for_reply<'q, Q, E>(
+        q: &mut Q,
+        e: E,
+    ) -> Result<ReplyHandler<Self, E>, Self::Error>
+    where
+        Q: crate::OutgoingQueue<'q>,
+        E: ReplyErrorHandler,
+    {
+        let serial = Self::send(q)?;
+        Ok(ReplyHandler::new(serial, Self::default(), e))
+    }
+
+    fn map(value: IncomingValue<'_>) -> Result<<Self as PropertyGet>::Output, DBusError>;
+}
+impl<T> HasReplyHandler for T
+where
+    T: PropertyGet,
+{
+    type Output = <T as PropertyGet>::Output;
+
+    fn handle(&self, body: IncomingBody<'_>) -> Result<Self::Output, DBusError> {
+        let item = body
+            .try_next()?
+            .ok_or(DBusError::Other("expected Body to have one value"))?;
+        value_is!(item, IncomingValue::Variant(item));
+        let item = item.materialize()?;
+        let x = Self::map(item)?;
+        Ok(x)
+    }
 }
 
 /// Defines known at compile time struct that can do a `GetProperty` call
