@@ -1,12 +1,9 @@
 use crate::{
-    DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
-    OutgoingQueue,
+    ConstFormatter, DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue,
+    MessageType, OutgoingQueue,
     const_helpers::get_range_mut,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
-    messaging::{
-        DBusPush, StaticallyEncodedMessage,
-        reply_handler::{HasReplyHandler, ReplyErrorHandler, ReplyHandler},
-    },
+    messaging::{DBusEncode, reply_handler::HasReplyHandler},
     value_is,
 };
 
@@ -16,11 +13,28 @@ pub trait PropertyChangedSignalHandler {
     type Output;
 
     /// Path to subscribe to.
-    fn path(&self) -> &str;
+    const PATH: &str = "";
+    /// Path to subscribe to.
+    #[expect(clippy::unnecessary_literal_bound)]
+    fn path(&self) -> &str {
+        ""
+    }
+
     /// Interface to subscribe to.
-    fn interface(&self) -> &str;
+    const INTERFACE: &str = "";
+    /// Interface to subscribe to.
+    #[expect(clippy::unnecessary_literal_bound)]
+    fn interface(&self) -> &str {
+        ""
+    }
+
     /// Property to subscribe to.
-    fn property_name(&self) -> &str;
+    const PROPERTY_NAME: &str = "";
+    /// Property to subscribe to.
+    #[expect(clippy::unnecessary_literal_bound)]
+    fn property_name(&self) -> &str {
+        ""
+    }
 
     /// Parses incoming message and returns changed Property value if:
     /// 1. it's a signal
@@ -31,11 +45,28 @@ pub trait PropertyChangedSignalHandler {
     ///
     /// Returns an error if given message is malformed.
     fn handle(&self, message: IncomingMessage<'_>) -> Result<Option<Self::Output>, DBusError> {
+        const fn choose<'a>(kind: &'static str, l: &'a str, r: &'a str) -> &'a str {
+            if l.is_empty() {
+                r
+            } else if r.is_empty() {
+                l
+            } else {
+                let mut fmt = ConstFormatter::<100>::new();
+                fmt.push_str("both ");
+                fmt.push_str(kind);
+                fmt.push_str(" strings are empty");
+                #[expect(clippy::panic)]
+                {
+                    panic!("{}", fmt.as_str())
+                }
+            }
+        }
+
         let Some(value) = find_property_in_properties_changes_reply(
             message,
-            self.path(),
-            self.interface(),
-            self.property_name(),
+            choose("path", self.path(), Self::PATH),
+            choose("interface", self.interface(), Self::INTERFACE),
+            choose("property", self.property_name(), Self::PROPERTY_NAME),
         )?
         else {
             return Ok(None);
@@ -52,54 +83,16 @@ pub trait PropertyChangedSignalHandler {
     fn map(&self, value: IncomingValue<'_>) -> Result<Self::Output, DBusError>;
 }
 
-/// A helper trait to handle signals on changing a single Property, assuming that configuration is static.
-pub trait StaticPropertyChangedSignalHandler {
-    /// Desired output
-    type Output;
-
-    /// Path to subscribe to.
-    const PATH: &str;
-    /// Interface to subscribe to.
-    const INTERFACE: &str;
-    /// Property to subscribe to.
-    const PROPERTY_NAME: &str;
-
-    /// Parses incoming message and returns changed Property value if:
-    /// 1. it's a signal
-    /// 2. it belongs to configured `PATH` and `INTERFACE`
-    /// 3. one of the properties is `PROPERTY_NAME`
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if given message is malformed.
-    fn handle(message: IncomingMessage<'_>) -> Result<Option<Self::Output>, DBusError> {
-        let Some(value) = find_property_in_properties_changes_reply(
-            message,
-            Self::PATH,
-            Self::INTERFACE,
-            Self::PROPERTY_NAME,
-        )?
-        else {
-            return Ok(None);
-        };
-
-        Ok(Some(Self::map(value)?))
-    }
-
-    /// Maps parsed Property value to `Self::Output`
-    ///
-    /// # Errors
-    ///
-    /// Can return an error if the value doesn't match the format.
-    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError>;
-}
-
 fn find_property_in_properties_changes_reply<'a>(
     message: IncomingMessage<'a>,
     path_to_match: &str,
     interface_to_match: &str,
     proeprty_name_to_match: &str,
 ) -> Result<Option<IncomingValue<'a>>, DBusError> {
+    assert!(!path_to_match.is_empty());
+    assert!(!interface_to_match.is_empty());
+    assert!(!proeprty_name_to_match.is_empty());
+
     if message.message_type != MessageType::Signal {
         return Ok(None);
     }
@@ -164,9 +157,9 @@ impl<'a> PropertySubscriber<'a> {
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    pub fn subscribe<'q, Q>(&self, buf: &'q mut [u8], q: &mut Q) -> Result<u32, EncodeError>
+    pub fn subscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
     where
-        Q: OutgoingQueue<'q>,
+        Q: OutgoingQueue,
     {
         let len = Subscribe::encode(
             buf,
@@ -176,7 +169,7 @@ impl<'a> PropertySubscriber<'a> {
             Some("PropertiesChanged"),
         )?;
         let buf = get_range_mut(buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
-        Ok(q.push(buf))
+        Ok(q.push_raw_buf(buf))
     }
 
     /// Unsubscribes
@@ -184,9 +177,9 @@ impl<'a> PropertySubscriber<'a> {
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    pub fn unsubscribe<'q, Q>(&self, buf: &'q mut [u8], q: &mut Q) -> Result<u32, EncodeError>
+    pub fn unsubscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
     where
-        Q: OutgoingQueue<'q>,
+        Q: OutgoingQueue,
     {
         let len = Unsubscribe::encode(
             buf,
@@ -196,52 +189,17 @@ impl<'a> PropertySubscriber<'a> {
             Some("PropertiesChanged"),
         )?;
         let buf = get_range_mut(buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
-        Ok(q.push(buf))
+        Ok(q.push_raw_buf(buf))
     }
 }
 
 /// A trait representing a `GetProperty` call with a reply handler
 pub trait PropertyGet
 where
-    Self: Sized + DBusPush,
+    Self: Sized + DBusEncode,
 {
     /// Output of the call
     type Output;
-
-    /// Pushes encoded message to a given queue and returns a ready-to-use `ReplyHandler`
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a queue returns an error
-    fn encode_push_and_prepare_for_reply<'q, Q, E>(
-        self,
-        data: <Self as DBusPush>::Data,
-        buf: &'q mut [u8],
-        q: &mut Q,
-        e: E,
-    ) -> Result<ReplyHandler<Self, E>, Self::Error>
-    where
-        Q: OutgoingQueue<'q>,
-        E: ReplyErrorHandler,
-    {
-        let serial = Self::push(data, buf, q)?;
-        Ok(ReplyHandler::new(serial, self, e))
-    }
-
-    /// Pushes encoded message to a given queue and returns a ready-to-use `ReplyHandler`
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a queue returns an error
-    fn push_static_and_prepare_for_reply<'q, Q, E>(self, q: &mut Q, e: E) -> ReplyHandler<Self, E>
-    where
-        Q: OutgoingQueue<'q>,
-        E: ReplyErrorHandler,
-        Self: StaticallyEncodedMessage,
-    {
-        let serial = Self::push_static(q);
-        ReplyHandler::new(serial, self, e)
-    }
 
     /// Maps returned `DBus` value to desired output
     ///

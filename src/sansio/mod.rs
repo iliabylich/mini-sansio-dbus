@@ -72,13 +72,13 @@ impl DBusConnection {
     /// # Errors
     ///
     /// Returns an error if given `readbuf` is too short
-    pub fn wants<'r, 'w, 'q, Q>(
+    pub fn wants<'r, 'w, Q>(
         &mut self,
         queue: &'w Q,
         readbuf: &'r mut [u8],
     ) -> Result<Option<DBusWants<'r, 'w>>, DBusError>
     where
-        Q: OutgoingQueue<'q>,
+        Q: OutgoingQueue,
     {
         match &mut self.state {
             State::Connecting(connector) => connector.wants(readbuf),
@@ -172,9 +172,9 @@ impl DBusConnection {
     /// # Errors
     ///
     /// Fails is operation is not the one that was last returned from `wants`
-    pub fn satisfy_write<'q, Q>(&mut self, len: usize, queue: &mut Q) -> Result<(), DBusError>
+    pub fn satisfy_write<Q>(&mut self, len: usize, queue: &mut Q) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<'q>,
+        Q: OutgoingQueue,
     {
         match &mut self.state {
             State::Connecting(connector) => {

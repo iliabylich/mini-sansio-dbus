@@ -92,12 +92,14 @@ impl<const CAP: usize> ConstFormatter<CAP> {
     ///
     /// Panics if pushed data doesn't form a valid UTF-8 string
     #[must_use]
-    #[expect(clippy::panic)]
     pub const fn as_str(&self) -> &str {
         match self.try_as_str() {
             Some(s) => s,
             None => {
-                panic!("failed to format buffer length error")
+                #[expect(clippy::panic)]
+                {
+                    panic!("failed to format buffer length error")
+                }
             }
         }
     }

@@ -1,4 +1,11 @@
-use crate::EncodeError;
+use crate::{
+    EncodeError,
+    const_helpers::get_range,
+    messaging::{
+        DBusEncode,
+        reply_handler::{HasReplyHandler, ReplyErrorHandler, ReplyHandler},
+    },
+};
 
 /// Allocates outgoing D-Bus message serials.
 #[derive(Debug, Clone, Copy)]
@@ -45,14 +52,50 @@ impl Default for DBusSerial {
 }
 
 /// A caller-owned queue of encoded outgoing messages.
-pub trait OutgoingQueue<'a> {
+pub trait OutgoingQueue {
     /// Pushes encoded message bytes after writing the next D-Bus serial into the header.
+    fn push_raw_buf(&mut self, message: &[u8]) -> u32;
+
+    /// High-level wrapper to encode -> push -> prepare for reply
     ///
     /// # Errors
     ///
-    /// Returns an error if the message is too short to contain a D-Bus header, or if the queue
-    /// cannot accept another message.
-    fn push(&mut self, message: &'a [u8]) -> u32;
+    /// Returns an error if the message is too short to contain encoded message
+    fn push_and_prepare_for_reply<const N: usize, M, E>(
+        &mut self,
+        message: M,
+        data: M::Data,
+        errhandler: E,
+    ) -> Result<ReplyHandler<M, E>, EncodeError>
+    where
+        M: DBusEncode + HasReplyHandler,
+        E: ReplyErrorHandler,
+    {
+        let mut buf = [0; N];
+        let len = M::encode(data, &mut buf)?;
+        let buf = get_range(&buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
+        let serial = Self::push_raw_buf(self, buf);
+        Ok(ReplyHandler::new(serial, message, errhandler))
+    }
+
+    /// High-level wrapper to encode -> push -> discard reply
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is too short to contain encoded message
+    fn push_and_discard_reply<const N: usize, M>(
+        &mut self,
+        data: M::Data,
+    ) -> Result<(), EncodeError>
+    where
+        M: DBusEncode,
+    {
+        let mut buf = [0; N];
+        let len = M::encode(data, &mut buf)?;
+        let buf = get_range(&buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
+        let _serial = Self::push_raw_buf(self, buf);
+        Ok(())
+    }
 
     /// Returns the first queued message.
     fn peek(&self) -> Option<&[u8]>;

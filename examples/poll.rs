@@ -1,69 +1,19 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusSerial, DBusWants, IncomingMessage, IncomingValue, MessageType,
-    OutgoingQueue, encode_message,
+    DBusConnection, DBusError, DBusWants, EncodeError, IncomingMessage, IncomingValue, MessageType,
+    OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Hello},
-    messaging::{
-        StaticallyEncodedMessage, property::PropertyGet, reply_handler::ReplyErrorHandler,
-    },
+    messaging::{DBusEncode, property::PropertyGet},
     value_is,
 };
 use rustix::{
     event::{PollFd, PollFlags},
     io::Errno,
 };
-use std::{
-    collections::VecDeque,
-    os::fd::{AsFd, BorrowedFd, OwnedFd},
-};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 
-#[derive(Debug)]
-struct ExampleQueue {
-    serial: DBusSerial,
-    messages: VecDeque<Vec<u8>>,
-}
-
-impl ExampleQueue {
-    fn new() -> Self {
-        Self {
-            serial: DBusSerial::new(),
-            messages: VecDeque::new(),
-        }
-    }
-}
-
-impl ExampleQueue {
-    fn next_serial(&mut self) -> u32 {
-        let serial = self.serial.current();
-        self.serial.advance();
-        serial
-    }
-}
-
-impl OutgoingQueue<'_> for ExampleQueue {
-    fn push(&mut self, message: &[u8]) -> u32 {
-        let serial = self.next_serial();
-        let mut message = message.to_vec();
-        DBusSerial::write_to_message(&mut message, serial).unwrap();
-        self.messages.push_back(message.to_vec());
-        serial
-    }
-
-    fn peek(&self) -> Option<&[u8]> {
-        self.messages.front().map(Vec::as_slice)
-    }
-
-    fn pop(&mut self) {
-        self.messages.pop_front();
-    }
-}
-
-struct DefaultErrorHandler;
-impl ReplyErrorHandler for DefaultErrorHandler {
-    fn on_error(&self, message_type: MessageType, error_name: &str) {
-        log::error!("call failed: {message_type:?} - {error_name:?}")
-    }
-}
+mod queue;
+use queue::ExampleQueue;
 
 struct PollDBus {
     conn: DBusConnection,
@@ -215,7 +165,8 @@ fn main() -> Result<()> {
     let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
-    let _ = Hello::push_static(&mut queue);
+
+    queue.push_and_discard_reply::<Hello>(())?;
 
     let mut primary_connection_path_reply_handler = None;
     let mut primary_connection_id_reply_serial = 0;
@@ -223,10 +174,8 @@ fn main() -> Result<()> {
     loop {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
-                primary_connection_path_reply_handler = Some(
-                    GetPrimaryConnection
-                        .push_static_and_prepare_for_reply(&mut queue, DefaultErrorHandler),
-                );
+                primary_connection_path_reply_handler =
+                    Some(queue.push_and_prepare_for_reply(GetPrimaryConnection, ())?);
             }
             ProcessResult::ReadWrite {
                 message,
@@ -274,14 +223,18 @@ fn main() -> Result<()> {
 }
 
 struct GetPrimaryConnection;
-impl StaticallyEncodedMessage for GetPrimaryConnection {
-    const ENCODED: &[u8] = &encode_message!(218, |buf| => GetProperty::encode(
-        buf,
-        "org.freedesktop.NetworkManager",
-        "/org/freedesktop/NetworkManager",
-        "org.freedesktop.NetworkManager",
-        "PrimaryConnection",
-    ));
+impl DBusEncode for GetPrimaryConnection {
+    type Data = ();
+
+    fn encode((): Self::Data, buf: &mut [u8]) -> Result<usize, EncodeError> {
+        GetProperty::encode(
+            buf,
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager",
+            "org.freedesktop.NetworkManager",
+            "PrimaryConnection",
+        )
+    }
 }
 impl PropertyGet for GetPrimaryConnection {
     type Output = String;
@@ -302,7 +255,7 @@ fn enqueue_get_property(
 ) -> Result<u32> {
     let len = GetProperty::encode(buf, destination, path, interface, property)?;
     let buf = buf.as_mut().get_mut(..len).context("malformed buffer")?;
-    let serial = queue.push(buf);
+    let serial = queue.push_raw_buf(buf);
     Ok(serial)
 }
 

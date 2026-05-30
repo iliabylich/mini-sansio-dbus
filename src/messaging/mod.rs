@@ -5,8 +5,5 @@ pub mod reply_handler;
 /// (at fixed, known at compile-time destination, path, and interface)
 pub mod property;
 
-mod statically_encoded_message;
-pub use statically_encoded_message::StaticallyEncodedMessage;
-
-mod dbus_push;
-pub use dbus_push::DBusPush;
+mod dbus_encode;
+pub use dbus_encode::DBusEncode;

@@ -19,12 +19,12 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn wants<'w, 'q, Q>(
+    pub(crate) fn wants<'w, Q>(
         &self,
         queue: &'w Q,
     ) -> Result<Option<DBusWants<'static, 'w>>, DBusError>
     where
-        Q: OutgoingQueue<'q>,
+        Q: OutgoingQueue,
     {
         match self.state {
             State::Writing { bytes_written } => {
@@ -43,13 +43,9 @@ impl DBusWriter {
         }
     }
 
-    pub(crate) fn satisfy_write<'q, Q>(
-        &mut self,
-        len: usize,
-        queue: &mut Q,
-    ) -> Result<(), DBusError>
+    pub(crate) fn satisfy_write<Q>(&mut self, len: usize, queue: &mut Q) -> Result<(), DBusError>
     where
-        Q: OutgoingQueue<'q>,
+        Q: OutgoingQueue,
     {
         match &mut self.state {
             State::Writing { bytes_written } => {

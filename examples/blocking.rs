@@ -1,51 +1,11 @@
 use anyhow::{Context, Result, bail};
 use mini_sansio_dbus::{
-    DBusConnection, DBusWants, IncomingMessage, MessageType, OutgoingQueue,
-    messages::org_freedesktop_dbus::Hello,
+    DBusConnection, DBusWants, IncomingMessage, MessageType, messages::org_freedesktop_dbus::Hello,
 };
-use mini_sansio_dbus::{DBusSerial, messaging::StaticallyEncodedMessage};
-use std::{collections::VecDeque, os::fd::OwnedFd};
+use std::os::fd::OwnedFd;
 
-#[derive(Debug)]
-struct ExampleQueue {
-    serial: DBusSerial,
-    messages: VecDeque<Vec<u8>>,
-}
-
-impl ExampleQueue {
-    fn new() -> Self {
-        Self {
-            serial: DBusSerial::new(),
-            messages: VecDeque::new(),
-        }
-    }
-}
-
-impl ExampleQueue {
-    fn next_serial(&mut self) -> u32 {
-        let serial = self.serial.current();
-        self.serial.advance();
-        serial
-    }
-}
-
-impl OutgoingQueue<'_> for ExampleQueue {
-    fn push(&mut self, message: &[u8]) -> u32 {
-        let serial = self.next_serial();
-        let mut message = message.to_vec();
-        DBusSerial::write_to_message(&mut message, serial).unwrap();
-        self.messages.push_back(message);
-        serial
-    }
-
-    fn peek(&self) -> Option<&[u8]> {
-        self.messages.front().map(|m| m.as_slice())
-    }
-
-    fn pop(&mut self) {
-        self.messages.pop_front();
-    }
-}
+mod queue;
+use queue::ExampleQueue;
 
 struct BlockingDBus {
     conn: DBusConnection,
@@ -141,7 +101,7 @@ fn main() -> Result<()> {
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
 
-    let _ = Hello::push_static(&mut queue);
+    queue.push_and_discard_reply::<Hello>(())?;
 
     dbus.socket(&queue, &mut readerbuf)?;
     dbus.connect(&queue, &mut readerbuf)?;
