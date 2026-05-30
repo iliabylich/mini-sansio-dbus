@@ -1,11 +1,44 @@
 use crate::{
-    ConstFormatter, DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue,
-    MessageType, OutgoingQueue,
+    DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
+    OutgoingQueue,
     const_helpers::get_range_mut,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
     messaging::{DBusEncode, reply_handler::HasReplyHandler},
     value_is,
 };
+use core::marker::PhantomData;
+
+/// Either constant or dynamic value for Path / Interface / Property name
+pub enum Conf<V: ?Sized + 'static, This: ?Sized> {
+    #[doc(hidden)]
+    Constant(&'static V),
+    #[doc(hidden)]
+    Dynamic {
+        f: for<'a> fn(&'a This) -> &'a V,
+        _phantom: PhantomData<This>,
+    },
+}
+impl<V: ?Sized + 'static, This: ?Sized> Conf<V, This> {
+    /// Constructs constant variant
+    pub const fn constant(value: &'static V) -> Self {
+        Self::Constant(value)
+    }
+
+    /// Constructs dynamic variant
+    pub const fn dynamic(f: for<'a> fn(&'a This) -> &'a V) -> Self {
+        Self::Dynamic {
+            f,
+            _phantom: PhantomData,
+        }
+    }
+
+    fn resolve<'a>(&self, this: &'a This) -> &'a V {
+        match self {
+            Self::Constant(v) => v,
+            Self::Dynamic { f, _phantom } => (f)(this),
+        }
+    }
+}
 
 /// A helper trait to handle signals on changing a single Property.
 pub trait PropertyChangedSignalHandler {
@@ -13,28 +46,13 @@ pub trait PropertyChangedSignalHandler {
     type Output;
 
     /// Path to subscribe to.
-    const PATH: &str = "";
-    /// Path to subscribe to.
-    #[expect(clippy::unnecessary_literal_bound)]
-    fn path(&self) -> &str {
-        ""
-    }
+    const PATH: Conf<str, Self>;
 
     /// Interface to subscribe to.
-    const INTERFACE: &str = "";
-    /// Interface to subscribe to.
-    #[expect(clippy::unnecessary_literal_bound)]
-    fn interface(&self) -> &str {
-        ""
-    }
+    const INTERFACE: Conf<str, Self>;
 
     /// Property to subscribe to.
-    const PROPERTY_NAME: &str = "";
-    /// Property to subscribe to.
-    #[expect(clippy::unnecessary_literal_bound)]
-    fn property_name(&self) -> &str {
-        ""
-    }
+    const PROPERTY_NAME: Conf<str, Self>;
 
     /// Parses incoming message and returns changed Property value if:
     /// 1. it's a signal
@@ -45,28 +63,11 @@ pub trait PropertyChangedSignalHandler {
     ///
     /// Returns an error if given message is malformed.
     fn handle(&self, message: IncomingMessage<'_>) -> Result<Option<Self::Output>, DBusError> {
-        const fn choose<'a>(kind: &'static str, l: &'a str, r: &'a str) -> &'a str {
-            if l.is_empty() {
-                r
-            } else if r.is_empty() {
-                l
-            } else {
-                let mut fmt = ConstFormatter::<100>::new();
-                fmt.push_str("both ");
-                fmt.push_str(kind);
-                fmt.push_str(" strings are empty");
-                #[expect(clippy::panic)]
-                {
-                    panic!("{}", fmt.as_str())
-                }
-            }
-        }
-
         let Some(value) = find_property_in_properties_changes_reply(
             message,
-            choose("path", self.path(), Self::PATH),
-            choose("interface", self.interface(), Self::INTERFACE),
-            choose("property", self.property_name(), Self::PROPERTY_NAME),
+            Self::PATH.resolve(self),
+            Self::INTERFACE.resolve(self),
+            Self::PROPERTY_NAME.resolve(self),
         )?
         else {
             return Ok(None);
