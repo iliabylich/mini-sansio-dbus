@@ -1,9 +1,8 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusWants, EncodeError, IncomingMessage, IncomingValue, MessageType,
-    OutgoingQueue,
-    messages::org_freedesktop_dbus::{GetProperty, Hello},
-    messaging::{DBusEncode, property::PropertyGet},
+    DBusConnection, DBusError, DBusWants, IncomingMessage, IncomingValue,
+    messages::org_freedesktop_dbus::Hello,
+    messaging::property::{Conf, Property},
     value_is,
 };
 use rustix::{
@@ -14,6 +13,8 @@ use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 
 mod queue;
 use queue::ExampleQueue;
+
+use crate::queue::DefaultErrorHandler;
 
 struct PollDBus {
     conn: DBusConnection,
@@ -162,20 +163,19 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut dbus = PollDBus::new()?;
-    let mut primary_connection_id_buf = [0; 512];
     let mut queue = ExampleQueue::new();
     let mut readerbuf = [0; 1_024];
 
     queue.push_and_discard_reply::<Hello>(())?;
 
     let mut primary_connection_path_reply_handler = None;
-    let mut primary_connection_id_reply_serial = 0;
+    let mut primary_connection_id_reply_handler = None;
 
     loop {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
                 primary_connection_path_reply_handler =
-                    Some(queue.push_and_prepare_for_reply(GetPrimaryConnection, ())?);
+                    Some(PrimaryConnection.get(&mut [0; 1_024], &mut queue)?);
             }
             ProcessResult::ReadWrite {
                 message,
@@ -188,25 +188,23 @@ fn main() -> Result<()> {
 
                     if let Some(primary_connection_path_reply_handler) =
                         primary_connection_path_reply_handler.as_ref()
-                        && let Some(primary_connection_path) =
-                            primary_connection_path_reply_handler.handle(message)?
+                        && let Some(primary_connection_path) = primary_connection_path_reply_handler
+                            .handle::<PrimaryConnection, DefaultErrorHandler>(message)?
                     {
                         log::info!("Primary connection: {primary_connection_path}");
 
-                        primary_connection_id_reply_serial = enqueue_get_property(
-                            &mut queue,
-                            &mut primary_connection_id_buf,
-                            "org.freedesktop.NetworkManager",
-                            &primary_connection_path,
-                            "org.freedesktop.NetworkManager.Connection.Active",
-                            "Id",
-                        )?;
+                        let conn_id = ConnId {
+                            conn_path: primary_connection_path,
+                        };
+                        primary_connection_id_reply_handler =
+                            Some(conn_id.get(&mut [0; 1_024], &mut queue)?);
                     }
 
-                    if let Some(id) = try_parse_primary_connection_id_reply(
-                        message,
-                        primary_connection_id_reply_serial,
-                    )? {
+                    if let Some(primary_connection_id_reply_handler) =
+                        primary_connection_id_reply_handler.as_ref()
+                        && let Some(id) = primary_connection_id_reply_handler
+                            .handle::<ConnId, DefaultErrorHandler>(message)?
+                    {
                         log::info!("Primary connection ID: {id}");
                         break;
                     }
@@ -222,22 +220,14 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-struct GetPrimaryConnection;
-impl DBusEncode for GetPrimaryConnection {
-    type Data = ();
-
-    fn encode((): Self::Data, buf: &mut [u8]) -> Result<&[u8], EncodeError> {
-        GetProperty::encode(
-            buf,
-            "org.freedesktop.NetworkManager",
-            "/org/freedesktop/NetworkManager",
-            "org.freedesktop.NetworkManager",
-            "PrimaryConnection",
-        )
-    }
-}
-impl PropertyGet for GetPrimaryConnection {
+struct PrimaryConnection;
+impl Property for PrimaryConnection {
     type Output = String;
+
+    const DESTINATION: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
+    const PATH: Conf<str, Self> = Conf::constant("/org/freedesktop/NetworkManager");
+    const INTERFACE: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
+    const PROPERTY_NAME: Conf<str, Self> = Conf::constant("PrimaryConnection");
 
     fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError> {
         value_is!(value, IncomingValue::ObjectPath(value));
@@ -245,17 +235,22 @@ impl PropertyGet for GetPrimaryConnection {
     }
 }
 
-fn enqueue_get_property(
-    queue: &mut ExampleQueue,
-    buf: &mut [u8],
-    destination: &str,
-    path: &str,
-    interface: &str,
-    property: &str,
-) -> Result<u32> {
-    let buf = GetProperty::encode(buf, destination, path, interface, property)?;
-    let serial = queue.push_raw_buf(buf);
-    Ok(serial)
+struct ConnId {
+    conn_path: String,
+}
+impl Property for ConnId {
+    type Output = String;
+
+    const DESTINATION: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
+    const PATH: Conf<str, Self> = Conf::dynamic(|this| this.conn_path.as_str());
+    const INTERFACE: Conf<str, Self> =
+        Conf::constant("org.freedesktop.NetworkManager.Connection.Active");
+    const PROPERTY_NAME: Conf<str, Self> = Conf::constant("Id");
+
+    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError> {
+        value_is!(value, IncomingValue::String(value));
+        Ok(value.to_string())
+    }
 }
 
 fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {
@@ -264,22 +259,4 @@ fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {
     ensure!(ready > 0);
     log::info!("poll() finished()");
     Ok(())
-}
-
-fn try_parse_primary_connection_id_reply<'a>(
-    message: IncomingMessage<'a>,
-    reply_serial: u32,
-) -> Result<Option<&'a str>> {
-    if message.message_type != MessageType::MethodReturn
-        || message.reply_serial != Some(reply_serial)
-    {
-        return Ok(None);
-    }
-
-    let mut body = message.body.context("no body")?;
-    let id = body.try_next()?.context("empty body")?;
-    value_is!(id, IncomingValue::Variant(id));
-    let id = id.materialize()?;
-    value_is!(id, IncomingValue::String(path));
-    Ok(Some(path))
 }

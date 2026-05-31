@@ -2,7 +2,7 @@ use crate::{
     EncodeError,
     messaging::{
         DBusEncode,
-        reply_handler::{HasReplyHandler, ReplyErrorHandler, ReplyHandler},
+        reply_handler::{HandleReply, ReplyHandler},
     },
 };
 
@@ -60,20 +60,17 @@ pub trait OutgoingQueue {
     /// # Errors
     ///
     /// Returns an error if the message is too short to contain encoded message
-    fn push_and_prepare_for_reply<const N: usize, M, E>(
+    fn push_and_prepare_for_reply<const N: usize, M>(
         &mut self,
-        message: M,
         data: M::Data,
-        errhandler: E,
-    ) -> Result<ReplyHandler<M, E>, EncodeError>
+    ) -> Result<ReplyHandler, EncodeError>
     where
-        M: DBusEncode + HasReplyHandler,
-        E: ReplyErrorHandler,
+        M: DBusEncode + HandleReply,
     {
         let mut buf = [0; N];
         let buf = M::encode(data, &mut buf)?;
         let serial = Self::push_raw_buf(self, buf);
-        Ok(ReplyHandler::new(serial, message, errhandler))
+        Ok(ReplyHandler::new(serial))
     }
 
     /// High-level wrapper to encode -> push -> discard reply

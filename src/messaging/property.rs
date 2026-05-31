@@ -1,8 +1,8 @@
 use crate::{
     DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
     OutgoingQueue,
-    messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
-    messaging::reply_handler::HasReplyHandler,
+    messages::org_freedesktop_dbus::{GetProperty, Subscribe, Unsubscribe},
+    messaging::reply_handler::{HandleReply, ReplyErrorHandler, ReplyHandler},
     value_is,
 };
 use core::marker::PhantomData;
@@ -37,50 +37,6 @@ impl<V: ?Sized + 'static, This: ?Sized> Conf<V, This> {
             Self::Dynamic { f, _phantom } => (f)(this),
         }
     }
-}
-
-/// A helper trait to handle signals on changing a single Property.
-pub trait PropertyChangedSignalHandler {
-    /// Desired output
-    type Output;
-
-    /// Path to subscribe to.
-    const PATH: Conf<str, Self>;
-
-    /// Interface to subscribe to.
-    const INTERFACE: Conf<str, Self>;
-
-    /// Property to subscribe to.
-    const PROPERTY_NAME: Conf<str, Self>;
-
-    /// Parses incoming message and returns changed Property value if:
-    /// 1. it's a signal
-    /// 2. it belongs to configured `PATH` and `INTERFACE`
-    /// 3. one of the properties is `PROPERTY_NAME`
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if given message is malformed.
-    fn handle(&self, message: IncomingMessage<'_>) -> Result<Option<Self::Output>, DBusError> {
-        let Some(value) = find_property_in_properties_changes_reply(
-            message,
-            Self::PATH.resolve(self),
-            Self::INTERFACE.resolve(self),
-            Self::PROPERTY_NAME.resolve(self),
-        )?
-        else {
-            return Ok(None);
-        };
-
-        Ok(Some(self.map(value)?))
-    }
-
-    /// Maps parsed Property value to `Self::Output`
-    ///
-    /// # Errors
-    ///
-    /// Can return an error if the value doesn't match the format.
-    fn map(&self, value: IncomingValue<'_>) -> Result<Self::Output, DBusError>;
 }
 
 fn find_property_in_properties_changes_reply<'a>(
@@ -134,19 +90,35 @@ fn find_property_in_properties_changes_reply<'a>(
     Ok(None)
 }
 
-/// A helper trait to start and stop `PropertiesChanged` subscription
-pub trait PropertiesChangedSubscription {
+/// A helper trait to:
+/// 1. get property value
+/// 2. subscribe and unsubscribe from its changes
+pub trait Property {
+    /// Desired output
+    type Output;
+
     /// Destination
     const DESTINATION: Conf<str, Self>;
     /// Path
     const PATH: Conf<str, Self>;
+    /// Interface
+    const INTERFACE: Conf<str, Self>;
+    /// Property name
+    const PROPERTY_NAME: Conf<str, Self>;
+
+    /// Maps returned `DBus` value to desired output
+    ///
+    /// # Errors
+    ///
+    /// May return an error that will be returned form a `handle` method
+    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError>;
 
     /// Subscribes
     ///
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    fn start<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
+    fn subscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
     where
         Q: OutgoingQueue,
     {
@@ -165,7 +137,7 @@ pub trait PropertiesChangedSubscription {
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    fn stop<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
+    fn unsubscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
     where
         Q: OutgoingQueue,
     {
@@ -178,27 +150,61 @@ pub trait PropertiesChangedSubscription {
         )?;
         Ok(q.push_raw_buf(buf))
     }
-}
 
-/// A trait representing a `GetProperty` call with a reply handler
-pub trait PropertyGet {
-    /// Output of the call
-    type Output;
-
-    /// Maps returned `DBus` value to desired output
+    /// Pushes a get request into a given queue
     ///
     /// # Errors
     ///
-    /// May return an error that will be returned form a `handle` method
-    fn map(value: IncomingValue<'_>) -> Result<<Self as PropertyGet>::Output, DBusError>;
-}
-impl<T> HasReplyHandler for T
-where
-    T: PropertyGet,
-{
-    type Output = <T as PropertyGet>::Output;
+    /// Returns an error if given buffer is too short.
+    fn get<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<ReplyHandler, EncodeError>
+    where
+        Self: HandleReply + Sized,
+        Q: OutgoingQueue,
+    {
+        let buf = GetProperty::encode(
+            buf,
+            Self::DESTINATION.resolve(self),
+            Self::PATH.resolve(self),
+            Self::INTERFACE.resolve(self),
+            Self::PROPERTY_NAME.resolve(self),
+        )?;
+        let serial = q.push_raw_buf(buf);
+        Ok(ReplyHandler::new(serial))
+    }
 
-    fn handle(&self, mut body: IncomingBody<'_>) -> Result<Self::Output, DBusError> {
+    /// Parses incoming message and returns changed Property value if:
+    /// 1. it's a signal
+    /// 2. it belongs to configured `PATH` and `INTERFACE`
+    /// 3. one of the properties is `PROPERTY_NAME`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if given message is malformed.
+    fn handle_signal(
+        &self,
+        message: IncomingMessage<'_>,
+    ) -> Result<Option<Self::Output>, DBusError> {
+        let Some(value) = find_property_in_properties_changes_reply(
+            message,
+            Self::PATH.resolve(self),
+            Self::INTERFACE.resolve(self),
+            Self::PROPERTY_NAME.resolve(self),
+        )?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self::map(value)?))
+    }
+}
+
+impl<T> HandleReply for T
+where
+    T: Property,
+{
+    type Output = <Self as Property>::Output;
+
+    fn handle_reply(mut body: IncomingBody<'_>) -> Result<Self::Output, DBusError> {
         let item = body
             .try_next()?
             .ok_or(DBusError::Other("expected Body to have one value"))?;
@@ -206,5 +212,99 @@ where
         let item = item.materialize()?;
         let x = Self::map(item)?;
         Ok(x)
+    }
+}
+
+/// A helper struct to combine getting a property and subscribing to its changes at the same time
+pub struct PropertyGetAndSubscribe<P>
+where
+    P: Property,
+{
+    property: P,
+    reply_handler: ReplyHandler,
+}
+
+impl<P> PropertyGetAndSubscribe<P>
+where
+    P: Property,
+{
+    /// Fires get + subscribe
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either `Get` or `AddMatch` message doesn't fit into a buffer
+    pub fn get_and_subscribe<Q>(property: P, buf: &mut [u8], q: &mut Q) -> Result<Self, EncodeError>
+    where
+        Q: OutgoingQueue,
+    {
+        let reply_handler = property.get(buf, q)?;
+        let _ = property.subscribe(buf, q)?;
+        Ok(Self {
+            property,
+            reply_handler,
+        })
+    }
+
+    /// Fires get
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `Get` message doesn't fit into a buffer
+    pub fn get<Q>(property: P, buf: &mut [u8], q: &mut Q) -> Result<Self, EncodeError>
+    where
+        Q: OutgoingQueue,
+    {
+        let reply_handler = property.get(buf, q)?;
+        Ok(Self {
+            property,
+            reply_handler,
+        })
+    }
+
+    /// Fires subscribe
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `AddMatch` message doesn't fit into a buffer
+    pub fn subscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<(), EncodeError>
+    where
+        Q: OutgoingQueue,
+    {
+        self.property.subscribe(buf, q)?;
+        Ok(())
+    }
+
+    /// Fires unsubscribe
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `RemoveMatch` message doesn't fit into a buffer
+    pub fn unsubscribe<Q>(self, buf: &mut [u8], q: &mut Q) -> Result<(), EncodeError>
+    where
+        Q: OutgoingQueue,
+    {
+        self.property.unsubscribe(buf, q)?;
+        Ok(())
+    }
+
+    /// Handles both reply and signal
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is invalid either as a matching reply or as a matching signal.
+    pub fn handle_reply_or_signal<E>(
+        &self,
+        message: IncomingMessage<'_>,
+    ) -> Result<Option<P::Output>, DBusError>
+    where
+        E: ReplyErrorHandler,
+    {
+        if let Some(out) = self.reply_handler.handle::<P, E>(message)? {
+            Ok(Some(out))
+        } else if let Some(out) = self.property.handle_signal(message)? {
+            Ok(Some(out))
+        } else {
+            Ok(None)
+        }
     }
 }

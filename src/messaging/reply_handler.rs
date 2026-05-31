@@ -1,20 +1,15 @@
 use crate::{DBusError, IncomingBody, IncomingMessage, MessageType};
 
 /// A generic reply handler, parameterezed to a concrete `HasReplyHandler` and `ReplyErrorHandler`
-pub struct ReplyHandler<T: HasReplyHandler, E: ReplyErrorHandler> {
+#[must_use]
+pub struct ReplyHandler {
     serial: u32,
-    handler: T,
-    errhandler: E,
 }
 
-impl<T: HasReplyHandler, E: ReplyErrorHandler> ReplyHandler<T, E> {
+impl ReplyHandler {
     /// Contstructor
-    pub const fn new(serial: u32, handler: T, errhandler: E) -> Self {
-        Self {
-            serial,
-            handler,
-            errhandler,
-        }
+    pub const fn new(serial: u32) -> Self {
+        Self { serial }
     }
 
     /// Tries to handle a given message.
@@ -22,19 +17,23 @@ impl<T: HasReplyHandler, E: ReplyErrorHandler> ReplyHandler<T, E> {
     /// # Errors
     ///
     /// Returns an error is message can't be parsed.
-    pub fn handle(&self, message: IncomingMessage<'_>) -> Result<Option<T::Output>, DBusError> {
+    pub fn handle<T, E>(&self, message: IncomingMessage<'_>) -> Result<Option<T::Output>, DBusError>
+    where
+        T: HandleReply,
+        E: ReplyErrorHandler,
+    {
         if message.reply_serial != Some(self.serial) {
             return Ok(None);
         }
         if message.message_type != MessageType::MethodReturn {
-            self.errhandler.on_error(
+            E::on_error(
                 message.message_type,
                 message.error_name.unwrap_or("<unknown error>"),
             );
             return Err(DBusError::ErrorReply);
         }
         let body = message.body.ok_or(DBusError::NoBody)?;
-        let out = self.handler.handle(body)?;
+        let out = T::handle_reply(body)?;
         Ok(Some(out))
     }
 }
@@ -43,11 +42,11 @@ impl<T: HasReplyHandler, E: ReplyErrorHandler> ReplyHandler<T, E> {
 pub trait ReplyErrorHandler {
     /// A method that is called when reply has an error.
     /// The error is returned anyway, but here you can do something app-specific.
-    fn on_error(&self, message_type: MessageType, error_name: &str);
+    fn on_error(message_type: MessageType, error_name: &str);
 }
 
 /// A reply handler trait, you should one your end
-pub trait HasReplyHandler {
+pub trait HandleReply {
     /// Output that it generates based on the given reply body.
     type Output;
 
@@ -56,5 +55,5 @@ pub trait HasReplyHandler {
     /// # Errors
     ///
     /// Any error that is returned is propagated by `ReplyHandler` that wraps `Self`
-    fn handle(&self, body: IncomingBody<'_>) -> Result<Self::Output, DBusError>;
+    fn handle_reply(body: IncomingBody<'_>) -> Result<Self::Output, DBusError>;
 }
