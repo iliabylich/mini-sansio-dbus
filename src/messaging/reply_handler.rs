@@ -2,14 +2,21 @@ use crate::{DBusError, IncomingBody, IncomingMessage, MessageType};
 
 /// A generic reply handler
 #[must_use]
-pub struct ReplyHandler {
+pub struct ReplyHandler<T>
+where
+    T: HandleReply,
+{
     serial: u32,
+    handler: T,
 }
 
-impl ReplyHandler {
+impl<T> ReplyHandler<T>
+where
+    T: HandleReply,
+{
     /// Contstructor
-    pub const fn new(serial: u32) -> Self {
-        Self { serial }
+    pub const fn new(serial: u32, handler: T) -> Self {
+        Self { serial, handler }
     }
 
     /// Tries to handle a given message.
@@ -17,10 +24,7 @@ impl ReplyHandler {
     /// # Errors
     ///
     /// Returns an error is message can't be parsed.
-    pub fn handle<T>(&self, message: IncomingMessage<'_>) -> Result<Option<T::Output>, DBusError>
-    where
-        T: HandleReply,
-    {
+    pub fn handle(&self, message: IncomingMessage<'_>) -> Result<Option<T::Output>, DBusError> {
         if message.reply_serial != Some(self.serial) {
             return Ok(None);
         }
@@ -28,7 +32,7 @@ impl ReplyHandler {
             return Err(DBusError::ErrorReply);
         }
         let body = message.body.ok_or(DBusError::NoBody)?;
-        let out = T::handle_reply(body)?;
+        let out = self.handler.handle_reply_body(body)?;
         Ok(Some(out))
     }
 }
@@ -43,5 +47,5 @@ pub trait HandleReply {
     /// # Errors
     ///
     /// Any error that is returned is propagated by `ReplyHandler` that wraps `Self`
-    fn handle_reply(body: IncomingBody<'_>) -> Result<Self::Output, DBusError>;
+    fn handle_reply_body(&self, body: IncomingBody<'_>) -> Result<Self::Output, DBusError>;
 }

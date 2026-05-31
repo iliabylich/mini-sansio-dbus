@@ -2,13 +2,13 @@ use crate::EncodeError;
 
 /// A common trait for all messages that can be encoded into a buffer
 pub trait DBusEncode {
-    /// Data to include
-    type Data;
+    /// Encoding arguments
+    type Args;
 
-    /// Encodes `Self` + data into a given `buf`
+    /// Encodes `Self` + args into a given `buf`
     ///
     /// # Errors
     ///
     /// May return an error if message doesn't fit into `buf`
-    fn encode(data: Self::Data, buf: &mut [u8]) -> Result<&[u8], EncodeError>;
+    fn encode(args: Self::Args, buf: &mut [u8]) -> Result<&[u8], EncodeError>;
 }

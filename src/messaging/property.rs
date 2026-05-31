@@ -9,7 +9,7 @@ use crate::{
 /// A helper trait to:
 /// 1. get property value
 /// 2. subscribe and unsubscribe from its changes
-pub trait Property {
+pub trait Property: Clone {
     /// Desired output
     type Output;
 
@@ -72,7 +72,7 @@ pub trait Property {
     /// # Errors
     ///
     /// Returns an error if given buffer is too short.
-    fn get<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<ReplyHandler, EncodeError>
+    fn get<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<ReplyHandler<Self>, EncodeError>
     where
         Self: HandleReply + Sized,
         Q: OutgoingQueue,
@@ -85,7 +85,7 @@ pub trait Property {
             Self::PROPERTY_NAME.resolve(self),
         )?;
         let serial = q.push_raw_buf(buf);
-        Ok(ReplyHandler::new(serial))
+        Ok(ReplyHandler::new(serial, self.clone()))
     }
 
     /// Parses incoming message and returns changed Property value if:
@@ -148,7 +148,7 @@ where
 {
     type Output = <Self as Property>::Output;
 
-    fn handle_reply(mut body: IncomingBody<'_>) -> Result<Self::Output, DBusError> {
+    fn handle_reply_body(&self, mut body: IncomingBody<'_>) -> Result<Self::Output, DBusError> {
         let item = body
             .try_next()?
             .ok_or(DBusError::Other("expected Body to have one value"))?;
@@ -164,7 +164,7 @@ where
     P: Property,
 {
     property: P,
-    reply_handler: ReplyHandler,
+    reply_handler: ReplyHandler<P>,
 }
 
 impl<P> PropertyGetAndSubscribe<P>
@@ -239,7 +239,7 @@ where
         &self,
         message: IncomingMessage<'_>,
     ) -> Result<Option<P::Output>, DBusError> {
-        if let Some(out) = self.reply_handler.handle::<P>(message)? {
+        if let Some(out) = self.reply_handler.handle(message)? {
             Ok(Some(out))
         } else if let Some(out) = self.property.handle_signal(message)? {
             Ok(Some(out))

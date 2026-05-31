@@ -110,26 +110,69 @@ impl<'a> IncomingValue<'a> {
         w: &mut impl core::fmt::Write,
         indent: usize,
     ) -> Result<(), core::fmt::Error> {
-        for _ in 0..indent {
-            write!(w, " ")?;
+        fn write_indent(indent: usize, w: &mut impl core::fmt::Write) -> core::fmt::Result {
+            for _ in 0..indent {
+                write!(w, " ")?;
+            }
+            Ok(())
         }
 
         match self {
-            Self::Byte(n) => writeln!(w, "u8: {n}")?,
-            Self::Bool(bool) => writeln!(w, "bool: {bool}")?,
-            Self::Int16(n) => writeln!(w, "i16: {n}")?,
-            Self::UInt16(n) => writeln!(w, "u16: {n}")?,
-            Self::Int32(n) => writeln!(w, "i32: {n}")?,
-            Self::UInt32(n) => writeln!(w, "u32: {n}")?,
-            Self::Int64(n) => writeln!(w, "i64: {n}")?,
-            Self::UInt64(n) => writeln!(w, "u64: {n}")?,
-            Self::Double(n) => writeln!(w, "double: {n}")?,
-            Self::UnixFD(n) => writeln!(w, "unixfd: {n}")?,
-            Self::String(s) => writeln!(w, "string: {s:?}")?,
-            Self::ObjectPath(path) => writeln!(w, "path: {path:?}")?,
-            Self::Signature(signature) => writeln!(w, "signature: {signature:?}")?,
+            Self::Byte(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "u8: {n}")?;
+            }
+            Self::Bool(bool) => {
+                write_indent(indent, w)?;
+                writeln!(w, "bool: {bool}")?;
+            }
+            Self::Int16(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "i16: {n}")?;
+            }
+            Self::UInt16(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "u16: {n}")?;
+            }
+            Self::Int32(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "i32: {n}")?;
+            }
+            Self::UInt32(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "u32: {n}")?;
+            }
+            Self::Int64(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "i64: {n}")?;
+            }
+            Self::UInt64(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "u64: {n}")?;
+            }
+            Self::Double(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "double: {n}")?;
+            }
+            Self::UnixFD(n) => {
+                write_indent(indent, w)?;
+                writeln!(w, "unixfd: {n}")?;
+            }
+            Self::String(s) => {
+                write_indent(indent, w)?;
+                writeln!(w, "string: {s:?}")?;
+            }
+            Self::ObjectPath(path) => {
+                write_indent(indent, w)?;
+                writeln!(w, "path: {path:?}")?;
+            }
+            Self::Signature(signature) => {
+                write_indent(indent, w)?;
+                writeln!(w, "signature: {signature:?}")?;
+            }
             Self::Struct(struct_) => {
                 let mut iter = struct_.fields_iter().map_err(|_| core::fmt::Error)?;
+                write_indent(indent, w)?;
                 writeln!(w, "struct:")?;
                 while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
                     item.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
@@ -137,21 +180,30 @@ impl<'a> IncomingValue<'a> {
             }
             Self::Array(array) => {
                 let mut iter = array.items_iter();
+                write_indent(indent, w)?;
                 writeln!(w, "array:")?;
                 while let Some(item) = iter.try_next().map_err(|_| core::fmt::Error)? {
                     item.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
                 }
             }
             Self::DictEntry(pair) => {
-                writeln!(w, "dict:")?;
                 let (key, value) = pair.key_value().map_err(|_| core::fmt::Error)?;
-                writeln!(w, "    key:")?;
+
+                write_indent(indent, w)?;
+                writeln!(w, "dict:")?;
+
+                write_indent(indent.checked_add(4).ok_or(core::fmt::Error)?, w)?;
+                writeln!(w, "key:")?;
                 key.log(w, indent.checked_add(8).ok_or(core::fmt::Error)?)?;
-                writeln!(w, "    value:")?;
+
+                write_indent(indent.checked_add(4).ok_or(core::fmt::Error)?, w)?;
+                writeln!(w, "value:")?;
                 value.log(w, indent.checked_add(8).ok_or(core::fmt::Error)?)?;
             }
             Self::Variant(variant) => {
+                write_indent(indent, w)?;
                 writeln!(w, "variant:")?;
+
                 let value = variant.materialize().map_err(|_| core::fmt::Error)?;
                 value.log(w, indent.checked_add(4).ok_or(core::fmt::Error)?)?;
             }

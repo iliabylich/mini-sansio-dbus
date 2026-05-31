@@ -3,9 +3,9 @@ use crate::{EncodeError, MessageType, SliceMessageEncoder, messaging::DBusEncode
 /// `Hello` message
 pub struct Hello;
 impl DBusEncode for Hello {
-    type Data = ();
+    type Args = ();
 
-    fn encode((): Self::Data, buf: &mut [u8]) -> Result<&[u8], EncodeError> {
+    fn encode((): Self::Args, buf: &mut [u8]) -> Result<&[u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path("/org/freedesktop/DBus")?;
         encoder.set_member("Hello")?;

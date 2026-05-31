@@ -62,15 +62,16 @@ pub trait OutgoingQueue {
     /// Returns an error if the message is too short to contain encoded message
     fn push_and_prepare_for_reply<const N: usize, M>(
         &mut self,
-        data: M::Data,
-    ) -> Result<ReplyHandler, EncodeError>
+        message: M,
+        args: M::Args,
+    ) -> Result<ReplyHandler<M>, EncodeError>
     where
         M: DBusEncode + HandleReply,
     {
         let mut buf = [0; N];
-        let buf = M::encode(data, &mut buf)?;
+        let buf = M::encode(args, &mut buf)?;
         let serial = Self::push_raw_buf(self, buf);
-        Ok(ReplyHandler::new(serial))
+        Ok(ReplyHandler::new(serial, message))
     }
 
     /// High-level wrapper to encode -> push -> discard reply
@@ -80,13 +81,13 @@ pub trait OutgoingQueue {
     /// Returns an error if the message is too short to contain encoded message
     fn push_and_discard_reply<const N: usize, M>(
         &mut self,
-        data: M::Data,
+        args: M::Args,
     ) -> Result<(), EncodeError>
     where
         M: DBusEncode,
     {
         let mut buf = [0; N];
-        let buf = M::encode(data, &mut buf)?;
+        let buf = M::encode(args, &mut buf)?;
         let _serial = Self::push_raw_buf(self, buf);
         Ok(())
     }
