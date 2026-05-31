@@ -27,20 +27,3 @@ impl core::fmt::Display for EncodeError {
 }
 
 impl core::error::Error for EncodeError {}
-
-impl EncodeError {
-    /// Returns a static string representation of the error.
-    #[must_use]
-    pub const fn display(self) -> &'static str {
-        match self {
-            Self::BufferTooSmall => "BufferTooSmall",
-            Self::TypeMismatch => "TypeMismatch",
-            Self::ValueTooLong => "ValueTooLong",
-            Self::ContainerTooLong => "ContainerTooLong",
-            Self::HeaderAlreadyFinished => "HeaderAlreadyFinished",
-            Self::BodySignatureExhausted => "BodySignatureExhausted",
-            Self::BodySignatureIncomplete => "BodySignatureIncomplete",
-            Self::ValueAlreadyWritten => "ValueAlreadyWritten",
-        }
-    }
-}
