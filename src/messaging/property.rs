@@ -2,7 +2,7 @@ use crate::{
     Conf, DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
     OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Subscribe, Unsubscribe},
-    messaging::reply_handler::{HandleReply, ReplyErrorHandler, ReplyHandler},
+    messaging::reply_handler::{HandleReply, ReplyHandler},
     value_is,
 };
 
@@ -235,14 +235,11 @@ where
     /// # Errors
     ///
     /// Returns an error if the message is invalid either as a matching reply or as a matching signal.
-    pub fn handle_reply_or_signal<E>(
+    pub fn handle_reply_or_signal(
         &self,
         message: IncomingMessage<'_>,
-    ) -> Result<Option<P::Output>, DBusError>
-    where
-        E: ReplyErrorHandler,
-    {
-        if let Some(out) = self.reply_handler.handle::<P, E>(message)? {
+    ) -> Result<Option<P::Output>, DBusError> {
+        if let Some(out) = self.reply_handler.handle::<P>(message)? {
             Ok(Some(out))
         } else if let Some(out) = self.property.handle_signal(message)? {
             Ok(Some(out))

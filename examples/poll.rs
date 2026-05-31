@@ -12,8 +12,6 @@ use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 mod queue;
 use queue::ExampleQueue;
 
-use crate::queue::DefaultErrorHandler;
-
 struct PollDBus {
     conn: DBusConnection,
     fd: Option<OwnedFd>,
@@ -187,7 +185,7 @@ fn main() -> Result<()> {
                     if let Some(primary_connection_path_reply_handler) =
                         primary_connection_path_reply_handler.as_ref()
                         && let Some(primary_connection_path) = primary_connection_path_reply_handler
-                            .handle::<PrimaryConnection, DefaultErrorHandler>(message)?
+                            .handle::<PrimaryConnection>(message)?
                     {
                         log::info!("Primary connection: {primary_connection_path}");
 
@@ -200,8 +198,8 @@ fn main() -> Result<()> {
 
                     if let Some(primary_connection_id_reply_handler) =
                         primary_connection_id_reply_handler.as_ref()
-                        && let Some(id) = primary_connection_id_reply_handler
-                            .handle::<ConnId, DefaultErrorHandler>(message)?
+                        && let Some(id) =
+                            primary_connection_id_reply_handler.handle::<ConnId>(message)?
                     {
                         log::info!("Primary connection ID: {id}");
                         break;

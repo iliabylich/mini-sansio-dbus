@@ -1,8 +1,8 @@
 use mini_sansio_dbus::{
-    DBusSerial, EncodeError, MessageType, OutgoingQueue,
+    DBusSerial, EncodeError, OutgoingQueue,
     messaging::{
         DBusEncode,
-        reply_handler::{HandleReply, ReplyErrorHandler, ReplyHandler},
+        reply_handler::{HandleReply, ReplyHandler},
     },
 };
 use std::collections::VecDeque;
@@ -64,14 +64,5 @@ impl OutgoingQueue for ExampleQueue {
 
     fn pop(&mut self) {
         self.messages.pop_front();
-    }
-}
-
-#[allow(dead_code)]
-pub(crate) struct DefaultErrorHandler;
-
-impl ReplyErrorHandler for DefaultErrorHandler {
-    fn on_error(message_type: MessageType, error_name: &str) {
-        log::error!("call failed: {message_type:?} - {error_name:?}")
     }
 }
