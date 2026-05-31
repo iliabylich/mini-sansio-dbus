@@ -1,8 +1,4 @@
-use crate::{
-    EncodeError, MessageType, SliceMessageEncoder,
-    const_helpers::{get_range, t_err},
-    dbus_body,
-};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body};
 
 /// Represents a request to subscribe to something in `DBus`
 pub struct AddMatch;
@@ -13,19 +9,16 @@ impl AddMatch {
     /// # Errors
     ///
     /// Returns an error if message doesn't fit into given buffer.
-    pub const fn encode<'a>(buf: &'a mut [u8], rule: &str) -> Result<&'a [u8], EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodCall));
-        t_err!(encoder.set_path("/org/freedesktop/DBus"));
-        t_err!(encoder.set_member("AddMatch"));
-        t_err!(encoder.set_interface("org.freedesktop.DBus"));
-        t_err!(encoder.set_destination("org.freedesktop.DBus"));
+    pub fn encode<'a>(buf: &'a mut [u8], rule: &str) -> Result<&'a [u8], EncodeError> {
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
+        encoder.set_path("/org/freedesktop/DBus")?;
+        encoder.set_member("AddMatch")?;
+        encoder.set_interface("org.freedesktop.DBus")?;
+        encoder.set_destination("org.freedesktop.DBus")?;
         dbus_body!(encoder, {
             str(rule),
         });
-        let len = t_err!(encoder.finish());
-        let Some(buf) = get_range(buf, 0, len) else {
-            return Err(EncodeError::BufferTooSmall);
-        };
-        Ok(buf)
+        let len = encoder.finish()?;
+        buf.get(0..len).ok_or(EncodeError::BufferTooSmall)
     }
 }

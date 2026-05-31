@@ -32,9 +32,3 @@ impl TryFrom<u8> for MessageType {
         Ok(ty)
     }
 }
-
-impl MessageType {
-    pub(crate) const fn into_u8(self) -> u8 {
-        self as u8
-    }
-}

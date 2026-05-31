@@ -1,6 +1,4 @@
-use crate::{
-    EncodeError, MessageType, SliceMessageEncoder, const_helpers::get_range, messaging::DBusEncode,
-};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, messaging::DBusEncode};
 
 /// `Hello` message
 pub struct Hello;
@@ -14,7 +12,6 @@ impl DBusEncode for Hello {
         encoder.set_interface("org.freedesktop.DBus")?;
         encoder.set_destination("org.freedesktop.DBus")?;
         let len = encoder.finish()?;
-        let buf = get_range(buf, 0, len).ok_or(EncodeError::BufferTooSmall)?;
-        Ok(buf)
+        buf.get(0..len).ok_or(EncodeError::BufferTooSmall)
     }
 }

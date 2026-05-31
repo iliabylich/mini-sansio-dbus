@@ -1,6 +1,4 @@
-use crate::{
-    EncodeError, MessageType, SliceMessageEncoder, const_helpers::get_range, dbus_body_fragment,
-};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body_fragment};
 
 /// Represents a request to set a single property on a given `DBus` object
 pub struct SetProperty;
@@ -33,9 +31,6 @@ impl SetProperty {
         (value)(&mut encoder)?;
 
         let len = encoder.finish()?;
-        let Some(buf) = get_range(buf, 0, len) else {
-            return Err(EncodeError::BufferTooSmall);
-        };
-        Ok(buf)
+        buf.get(0..len).ok_or(EncodeError::BufferTooSmall)
     }
 }

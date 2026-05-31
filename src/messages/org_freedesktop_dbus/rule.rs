@@ -1,9 +1,9 @@
-use crate::{EncodeError, const_helpers::get_range_mut};
+use crate::EncodeError;
 
 pub(crate) struct Rule;
 
 impl Rule {
-    pub(crate) const fn fmt(
+    pub(crate) fn fmt(
         buf: &mut [u8],
         sender: Option<&str>,
         interface: Option<&str>,
@@ -14,19 +14,11 @@ impl Rule {
 
         macro_rules! push {
             ($s:expr) => {{
-                let buflen = buf.len();
-                let Some(rest) = get_range_mut(buf, offset, buflen) else {
-                    return Err(EncodeError::BufferTooSmall);
-                };
-                let bytes_pushed = match push(rest, $s) {
-                    Ok(len) => len,
-                    Err(err) => return Err(err),
-                };
-                if let Some(new_offset) = offset.checked_add(bytes_pushed) {
-                    offset = new_offset;
-                } else {
-                    return Err(EncodeError::ValueTooLong);
-                }
+                let rest = buf.get_mut(offset..).ok_or(EncodeError::BufferTooSmall)?;
+                let bytes_pushed = push(rest, $s)?;
+                offset = offset
+                    .checked_add(bytes_pushed)
+                    .ok_or(EncodeError::ValueTooLong)?
             }};
         }
 
@@ -60,10 +52,8 @@ impl Rule {
     }
 }
 
-const fn push(buf: &mut [u8], s: &str) -> Result<usize, EncodeError> {
-    let Some(slice) = get_range_mut(buf, 0, s.len()) else {
-        return Err(EncodeError::BufferTooSmall);
-    };
+fn push(buf: &mut [u8], s: &str) -> Result<usize, EncodeError> {
+    let slice = buf.get_mut(0..s.len()).ok_or(EncodeError::BufferTooSmall)?;
     slice.copy_from_slice(s.as_bytes());
     Ok(s.len())
 }

@@ -33,9 +33,9 @@ impl DBusReader {
     ) -> Result<Option<DBusWants<'r, 'static>>, DBusError> {
         match self.state {
             State::ReadHeader { bytes_read } => {
-                let Some(remainder) = buf.get_mut(bytes_read..HEADER_LEN) else {
-                    return Err(DBusError::ReadBufIsTooShort);
-                };
+                let remainder = buf
+                    .get_mut(bytes_read..HEADER_LEN)
+                    .ok_or(DBusError::ReadBufIsTooShort)?;
                 Ok(Some(DBusWants::Read {
                     buf: remainder,
                     seq: self.seq,
@@ -46,9 +46,9 @@ impl DBusReader {
                 bytes_read,
                 message_len,
             } => {
-                let Some(remainder) = buf.get_mut(bytes_read..message_len) else {
-                    return Err(DBusError::ReadBufIsTooShort);
-                };
+                let remainder = buf
+                    .get_mut(bytes_read..message_len)
+                    .ok_or(DBusError::ReadBufIsTooShort)?;
                 Ok(Some(DBusWants::Read {
                     buf: remainder,
                     seq: self.seq,

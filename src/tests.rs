@@ -21,9 +21,7 @@ const MESSAGE_BLOB: &[u8] = &[
     0, 0, 0, 1, 105, 0, 0, 247, 255, 255, 255,
 ];
 
-const CONST_MACRO_MESSAGE: Result<([u8; 128], usize), EncodeError> = const_macro_message();
-
-const fn const_macro_message() -> Result<([u8; 128], usize), EncodeError> {
+fn encode_message() -> Result<([u8; 128], usize), EncodeError> {
     let mut buf = [0; 128];
     let mut encoder = match SliceMessageEncoder::new(&mut buf, MessageType::MethodCall) {
         Ok(encoder) => encoder,
@@ -90,7 +88,7 @@ fn encoder_encodes_message_to_expected_in_memory_blob() -> Result<(), EncodeErro
 
 #[test]
 fn macro_encoder_can_run_in_const_context() -> Result<(), DBusError> {
-    let Ok((buf, len)) = CONST_MACRO_MESSAGE else {
+    let Ok((buf, len)) = encode_message() else {
         return Err(DBusError::MalformedBody);
     };
     let message = IncomingMessage::new(buf.get(..len).ok_or(DBusError::MalformedBody)?)?;

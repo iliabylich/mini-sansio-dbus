@@ -31,9 +31,7 @@ impl DBusWriter {
                 let Some(buf) = queue.peek() else {
                     return Ok(None);
                 };
-                let Some(remainder) = buf.get(bytes_written..) else {
-                    return Err(DBusError::InternalError);
-                };
+                let remainder = buf.get(bytes_written..).ok_or(DBusError::InternalError)?;
                 Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,

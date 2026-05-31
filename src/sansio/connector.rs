@@ -66,9 +66,9 @@ impl DBusConnector {
             })),
 
             State::WriteAuthExternal { bytes_written } => {
-                let Some(remainder) = AUTH_EXTERNAL.get(bytes_written..) else {
-                    return Err(DBusError::InternalError);
-                };
+                let remainder = AUTH_EXTERNAL
+                    .get(bytes_written..)
+                    .ok_or(DBusError::InternalError)?;
                 Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
@@ -76,16 +76,14 @@ impl DBusConnector {
             }
 
             State::ReadData { bytes_read } => {
-                let Some(buf) = buf.get_mut(bytes_read..DATA.len()) else {
-                    return Err(DBusError::ReadBufIsTooShort);
-                };
+                let buf = buf
+                    .get_mut(bytes_read..DATA.len())
+                    .ok_or(DBusError::ReadBufIsTooShort)?;
                 Ok(Some(DBusWants::Read { buf, seq: self.seq }))
             }
 
             State::WriteData { bytes_written } => {
-                let Some(remainder) = DATA.get(bytes_written..) else {
-                    return Err(DBusError::InternalError);
-                };
+                let remainder = DATA.get(bytes_written..).ok_or(DBusError::InternalError)?;
                 Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,
@@ -93,16 +91,14 @@ impl DBusConnector {
             }
 
             State::ReadGUID { bytes_read } => {
-                let Some(buf) = buf.get_mut(bytes_read..GUID_LENGTH) else {
-                    return Err(DBusError::ReadBufIsTooShort);
-                };
+                let buf = buf
+                    .get_mut(bytes_read..GUID_LENGTH)
+                    .ok_or(DBusError::ReadBufIsTooShort)?;
                 Ok(Some(DBusWants::Read { buf, seq: self.seq }))
             }
 
             State::WriteBegin { bytes_written } => {
-                let Some(remainder) = BEGIN.get(bytes_written..) else {
-                    return Err(DBusError::InternalError);
-                };
+                let remainder = BEGIN.get(bytes_written..).ok_or(DBusError::InternalError)?;
                 Ok(Some(DBusWants::Write {
                     buf: remainder,
                     seq: self.seq,

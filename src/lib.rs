@@ -18,8 +18,6 @@
 #![doc = include_str!("../README.md")]
 
 mod body_macro;
-mod const_formatter;
-mod const_helpers;
 mod encoder;
 mod error;
 mod incoming;
@@ -36,7 +34,6 @@ pub mod messages;
 /// A module with helper types and traits to simplify messaging
 pub mod messaging;
 
-pub use const_formatter::ConstFormatter;
 pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
 pub use error::DBusError;
 pub use incoming::{

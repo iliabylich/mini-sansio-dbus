@@ -29,9 +29,3 @@ impl From<u8> for HeaderFieldCode {
         }
     }
 }
-
-impl HeaderFieldCode {
-    pub(crate) const fn into_u8(self) -> u8 {
-        self as u8
-    }
-}

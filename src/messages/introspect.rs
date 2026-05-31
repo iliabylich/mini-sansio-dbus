@@ -1,8 +1,5 @@
 use crate::{
-    DBusError, EncodeError, MessageType, SliceMessageEncoder,
-    const_helpers::{get_range, t_err},
-    dbus_body,
-    incoming::IncomingMessage,
+    DBusError, EncodeError, MessageType, SliceMessageEncoder, dbus_body, incoming::IncomingMessage,
     interface_is, member_is, path_is,
 };
 
@@ -98,22 +95,19 @@ impl IntrospectResponse {
     /// # Errors
     ///
     /// Returns an error if message doesn't fit into given buffer.
-    pub const fn encode<'a>(
+    pub fn encode<'a>(
         buf: &'a mut [u8],
         reply_serial: u32,
         destination: &str,
         xml: &str,
     ) -> Result<&'a [u8], EncodeError> {
-        let mut encoder = t_err!(SliceMessageEncoder::new(buf, MessageType::MethodReturn));
-        t_err!(encoder.set_reply_serial(reply_serial));
-        t_err!(encoder.set_destination(destination));
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
+        encoder.set_reply_serial(reply_serial)?;
+        encoder.set_destination(destination)?;
         dbus_body!(encoder, {
             str(xml),
         });
-        let len = t_err!(encoder.finish());
-        let Some(buf) = get_range(buf, 0, len) else {
-            return Err(EncodeError::BufferTooSmall);
-        };
-        Ok(buf)
+        let len = encoder.finish()?;
+        buf.get(0..len).ok_or(EncodeError::BufferTooSmall)
     }
 }
