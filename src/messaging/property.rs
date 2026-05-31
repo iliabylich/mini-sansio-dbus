@@ -1,94 +1,10 @@
 use crate::{
-    DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
+    Conf, DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
     OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Subscribe, Unsubscribe},
     messaging::reply_handler::{HandleReply, ReplyErrorHandler, ReplyHandler},
     value_is,
 };
-use core::marker::PhantomData;
-
-/// Either constant or dynamic value for Path / Interface / Property name
-pub enum Conf<V: ?Sized + 'static, This: ?Sized> {
-    #[doc(hidden)]
-    Constant(&'static V),
-    #[doc(hidden)]
-    Dynamic {
-        f: for<'a> fn(&'a This) -> &'a V,
-        _phantom: PhantomData<This>,
-    },
-}
-impl<V: ?Sized + 'static, This: ?Sized> Conf<V, This> {
-    /// Constructs constant variant
-    pub const fn constant(value: &'static V) -> Self {
-        Self::Constant(value)
-    }
-
-    /// Constructs dynamic variant
-    pub const fn dynamic(f: for<'a> fn(&'a This) -> &'a V) -> Self {
-        Self::Dynamic {
-            f,
-            _phantom: PhantomData,
-        }
-    }
-
-    fn resolve<'a>(&self, this: &'a This) -> &'a V {
-        match self {
-            Self::Constant(v) => v,
-            Self::Dynamic { f, _phantom } => (f)(this),
-        }
-    }
-}
-
-fn find_property_in_properties_changes_reply<'a>(
-    message: IncomingMessage<'a>,
-    path_to_match: &str,
-    interface_to_match: &str,
-    proeprty_name_to_match: &str,
-) -> Result<Option<IncomingValue<'a>>, DBusError> {
-    assert!(!path_to_match.is_empty());
-    assert!(!interface_to_match.is_empty());
-    assert!(!proeprty_name_to_match.is_empty());
-
-    if message.message_type != MessageType::Signal {
-        return Ok(None);
-    }
-    if message.interface != Some("org.freedesktop.DBus.Properties") {
-        return Ok(None);
-    }
-    if message.path != Some(path_to_match) {
-        return Ok(None);
-    }
-    let Some(mut body) = message.body else {
-        return Ok(None);
-    };
-
-    let interface = body
-        .try_next()?
-        .ok_or(DBusError::Other("no Interface in Body"))?;
-    value_is!(interface, IncomingValue::String(interface));
-    if interface != interface_to_match {
-        return Ok(None);
-    }
-
-    let attributes = body
-        .try_next()?
-        .ok_or(DBusError::Other("no Attributes in Body"))?;
-    value_is!(attributes, IncomingValue::Array(attributes));
-    let mut iter = attributes.items_iter();
-    while let Some(attribute) = iter.try_next()? {
-        value_is!(attribute, IncomingValue::DictEntry(attribute));
-        let (key, value) = attribute.key_value()?;
-        value_is!(key, IncomingValue::String(key));
-
-        if key == proeprty_name_to_match {
-            value_is!(value, IncomingValue::Variant(value));
-            let value = value.materialize()?;
-            return Ok(Some(value));
-        }
-    }
-
-    Ok(None)
-}
 
 /// A helper trait to:
 /// 1. get property value
@@ -184,17 +100,45 @@ pub trait Property {
         &self,
         message: IncomingMessage<'_>,
     ) -> Result<Option<Self::Output>, DBusError> {
-        let Some(value) = find_property_in_properties_changes_reply(
-            message,
-            Self::PATH.resolve(self),
-            Self::INTERFACE.resolve(self),
-            Self::PROPERTY_NAME.resolve(self),
-        )?
-        else {
+        if message.message_type != MessageType::Signal {
+            return Ok(None);
+        }
+        if message.interface != Some("org.freedesktop.DBus.Properties") {
+            return Ok(None);
+        }
+        if message.path != Some(Self::PATH.resolve(self)) {
+            return Ok(None);
+        }
+        let Some(mut body) = message.body else {
             return Ok(None);
         };
 
-        Ok(Some(Self::map(value)?))
+        let interface = body
+            .try_next()?
+            .ok_or(DBusError::Other("no Interface in Body"))?;
+        value_is!(interface, IncomingValue::String(interface));
+        if interface != Self::INTERFACE.resolve(self) {
+            return Ok(None);
+        }
+
+        let attributes = body
+            .try_next()?
+            .ok_or(DBusError::Other("no Attributes in Body"))?;
+        value_is!(attributes, IncomingValue::Array(attributes));
+        let mut iter = attributes.items_iter();
+        while let Some(attribute) = iter.try_next()? {
+            value_is!(attribute, IncomingValue::DictEntry(attribute));
+            let (key, value) = attribute.key_value()?;
+            value_is!(key, IncomingValue::String(key));
+
+            if key == Self::PROPERTY_NAME.resolve(self) {
+                value_is!(value, IncomingValue::Variant(value));
+                let value = value.materialize()?;
+                return Ok(Some(Self::map(value)?));
+            }
+        }
+
+        Ok(None)
     }
 }
 
@@ -210,8 +154,7 @@ where
             .ok_or(DBusError::Other("expected Body to have one value"))?;
         value_is!(item, IncomingValue::Variant(item));
         let item = item.materialize()?;
-        let x = Self::map(item)?;
-        Ok(x)
+        Self::map(item)
     }
 }
 

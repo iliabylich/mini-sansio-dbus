@@ -18,6 +18,7 @@
 #![doc = include_str!("../README.md")]
 
 mod body_macro;
+mod conf;
 mod encoder;
 mod error;
 mod incoming;
@@ -34,6 +35,7 @@ pub mod messages;
 /// A module with helper types and traits to simplify messaging
 pub mod messaging;
 
+pub use conf::Conf;
 pub use encoder::{EncodeError, MessageEncoder as SliceMessageEncoder};
 pub use error::DBusError;
 pub use incoming::{

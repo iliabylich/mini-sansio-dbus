@@ -1,9 +1,7 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    DBusConnection, DBusError, DBusWants, IncomingMessage, IncomingValue,
-    messages::org_freedesktop_dbus::Hello,
-    messaging::property::{Conf, Property},
-    value_is,
+    Conf, DBusConnection, DBusError, DBusWants, IncomingMessage, IncomingValue,
+    messages::org_freedesktop_dbus::Hello, messaging::property::Property, value_is,
 };
 use rustix::{
     event::{PollFd, PollFlags},
