@@ -33,7 +33,7 @@ impl ExampleQueue {
     pub(crate) fn push_and_prepare_for_reply<M>(
         &mut self,
         message: M,
-        data: M::Args,
+        data: M::Args<'_>,
     ) -> Result<ReplyHandler<M>, EncodeError>
     where
         M: DBusEncode + HandleReply,
@@ -42,7 +42,7 @@ impl ExampleQueue {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn push_and_discard_reply<M>(&mut self, data: M::Args) -> Result<(), EncodeError>
+    pub(crate) fn push_and_discard_reply<M>(&mut self, data: M::Args<'_>) -> Result<(), EncodeError>
     where
         M: DBusEncode,
     {

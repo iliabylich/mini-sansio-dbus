@@ -7,6 +7,9 @@ pub mod org_freedesktop_dbus;
 /// a module with built-in `NetworkManager` request/response objects
 pub mod network_manager;
 
+/// a module with built-in `(K)SNI` host request/response objects
+pub mod sni_host;
+
 mod error_no_method;
 pub use error_no_method::ErrorNoMethod;
 

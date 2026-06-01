@@ -63,7 +63,7 @@ pub trait OutgoingQueue {
     fn push_and_prepare_for_reply<const N: usize, M>(
         &mut self,
         message: M,
-        args: M::Args,
+        args: M::Args<'_>,
     ) -> Result<ReplyHandler<M>, EncodeError>
     where
         M: DBusEncode + HandleReply,
@@ -81,7 +81,7 @@ pub trait OutgoingQueue {
     /// Returns an error if the message is too short to contain encoded message
     fn push_and_discard_reply<const N: usize, M>(
         &mut self,
-        args: M::Args,
+        args: M::Args<'_>,
     ) -> Result<(), EncodeError>
     where
         M: DBusEncode,
