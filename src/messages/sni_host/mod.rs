@@ -21,3 +21,6 @@ pub use get_layout::{GetLayout, GetLayoutItem, GetLayoutList};
 
 mod event;
 pub use event::Event;
+
+mod introspection;
+pub use introspection::StatusNotifierWatcherIntrospection;

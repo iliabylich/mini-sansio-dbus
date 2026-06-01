@@ -43,7 +43,7 @@ macro_rules! __dbus_try {
     ($expr:expr) => {
         match $expr {
             Ok(value) => value,
-            Err(err) => return Err(err),
+            Err(err) => return Err(err.into()),
         }
     };
 }

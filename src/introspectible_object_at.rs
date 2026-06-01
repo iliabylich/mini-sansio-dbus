@@ -1,8 +1,7 @@
 use crate::{
-    DBusError, destination_is,
+    DBusError,
     incoming::{IncomingMessage, IncomingValue},
     types::MessageType,
-    value_is,
 };
 
 /// A helper object to provide `DBus` introspection
@@ -22,43 +21,55 @@ impl IntrospectibleObjectAt {
     /// # Errors
     ///
     /// Returns an error if message doesn't belong to instrospection protocol or invalid.
+    #[must_use]
     pub fn handle<'a>(
         &self,
         message: IncomingMessage<'a>,
-    ) -> Result<(u32, &'a str, IntrospectibleObjectAtRequest<'a>), DBusError> {
+    ) -> Option<(u32, &'a str, IntrospectibleObjectAtRequest<'a>)> {
         if message.message_type != MessageType::MethodCall {
-            return Err(DBusError::WrongMessageType);
+            return None;
+        }
+        let serial = message.serial;
+        let path = message.path?;
+        let member = message.member?;
+        let interface = message.interface?;
+        let destination = message.destination?;
+        let sender = message.sender?;
+        let mut body = message.body?;
+
+        if destination != self.destination {
+            return None;
         }
 
-        let serial = message.serial;
-        let path = message.path.ok_or(DBusError::NoPath)?;
-        let member = message.member.ok_or(DBusError::NoMember)?;
-        let interface = message.interface.ok_or(DBusError::NoInterface)?;
-        let destination = message.destination.ok_or(DBusError::NoDestination)?;
-        let sender = message.sender.ok_or(DBusError::NoSender)?;
-        let mut body = message.body.ok_or(DBusError::NoBody)?;
-
-        destination_is!(destination, self.destination);
+        let err = |s: &'static str| {
+            Some((
+                serial,
+                destination,
+                IntrospectibleObjectAtRequest::Error(DBusError::Other(s)),
+            ))
+        };
 
         let req = match interface {
             "org.freedesktop.DBus.Introspectable" => match member {
                 "Introspect" => IntrospectibleObjectAtRequest::Introspect { path },
-                _ => return Err(DBusError::UnknownMember),
+                _ => return err("unknown method"),
             },
 
             "org.freedesktop.DBus.Peer" => match member {
                 "GetMachinId" => IntrospectibleObjectAtRequest::GetMachineId,
                 "Ping" => IntrospectibleObjectAtRequest::Ping,
-                _ => return Err(DBusError::UnknownMember),
+                _ => return err("unknown method"),
             },
 
             "org.freedesktop.DBus.Properties" => match member {
                 "Get" => {
-                    let interface = body.try_next()?.ok_or(DBusError::NoInterface)?;
-                    value_is!(interface, IncomingValue::String(interface));
+                    let Ok(Some(IncomingValue::String(interface))) = body.try_next() else {
+                        return err("missing or malformed Interface in Body");
+                    };
 
-                    let property_name = body.try_next()?.ok_or(DBusError::NoPropertyName)?;
-                    value_is!(property_name, IncomingValue::String(property_name));
+                    let Ok(Some(IncomingValue::String(property_name))) = body.try_next() else {
+                        return err("missing or malformed PropertyName in Body");
+                    };
 
                     IntrospectibleObjectAtRequest::GetProperty {
                         path,
@@ -67,19 +78,20 @@ impl IntrospectibleObjectAt {
                     }
                 }
                 "GetAll" => {
-                    let interface = body.try_next()?.ok_or(DBusError::NoInterface)?;
-                    value_is!(interface, IncomingValue::String(interface));
+                    let Ok(Some(IncomingValue::String(interface))) = body.try_next() else {
+                        return err("missing or malformed Interface in Body");
+                    };
 
                     IntrospectibleObjectAtRequest::GetAllProperties { path, interface }
                 }
                 "Set" => IntrospectibleObjectAtRequest::SetProperty,
-                _ => return Err(DBusError::UnknownMember),
+                _ => return err("unknown method"),
             },
 
-            _ => return Err(DBusError::UnknownInterface),
+            _ => return None,
         };
 
-        Ok((serial, sender, req))
+        Some((serial, sender, req))
     }
 }
 
@@ -115,4 +127,7 @@ pub enum IntrospectibleObjectAtRequest<'a> {
     },
     /// A request to set property. Not implemented because it makes no sense.
     SetProperty,
+
+    /// A request that is either invalid or unknown.
+    Error(DBusError),
 }
