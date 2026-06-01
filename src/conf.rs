@@ -1,15 +1,10 @@
-use core::marker::PhantomData;
-
 /// Either constant or dynamic value for Path / Interface / Property name
 #[derive(Clone, Copy)]
 pub enum Conf<V: ?Sized + 'static, Data: ?Sized> {
     #[doc(hidden)]
     Constant(&'static V),
     #[doc(hidden)]
-    Dynamic {
-        f: for<'a> fn(&'a Data) -> &'a V,
-        _phantom: PhantomData<Data>,
-    },
+    Dynamic { f: for<'a> fn(&'a Data) -> &'a V },
 }
 impl<V: ?Sized + 'static, Data: ?Sized> Conf<V, Data> {
     /// Constructs constant variant
@@ -19,16 +14,13 @@ impl<V: ?Sized + 'static, Data: ?Sized> Conf<V, Data> {
 
     /// Constructs dynamic variant
     pub const fn dynamic(f: for<'a> fn(&'a Data) -> &'a V) -> Self {
-        Self::Dynamic {
-            f,
-            _phantom: PhantomData,
-        }
+        Self::Dynamic { f }
     }
 
     pub(crate) fn resolve(self, data: &Data) -> &V {
         match self {
             Self::Constant(v) => v,
-            Self::Dynamic { f, _phantom } => (f)(data),
+            Self::Dynamic { f } => (f)(data),
         }
     }
 }

@@ -15,3 +15,9 @@ pub use menu::Menu;
 
 mod new_icon;
 pub use new_icon::NewIconSignal;
+
+mod get_layout;
+pub use get_layout::{GetLayout, GetLayoutItem, GetLayoutList};
+
+mod event;
+pub use event::Event;
