@@ -23,19 +23,13 @@ const MESSAGE_BLOB: &[u8] = &[
 
 fn encode_message() -> Result<([u8; 128], usize), EncodeError> {
     let mut buf = [0; 128];
-    let mut encoder = match SliceMessageEncoder::new(&mut buf, MessageType::MethodCall) {
-        Ok(encoder) => encoder,
-        Err(err) => return Err(err),
-    };
+    let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodCall)?;
     dbus_body!(encoder, {
         u32(42),
         str("const"),
         array<u16> [1, 2],
     });
-    let len = match encoder.finish() {
-        Ok(len) => len,
-        Err(err) => return Err(err),
-    };
+    let len = encoder.finish()?;
     Ok((buf, len))
 }
 

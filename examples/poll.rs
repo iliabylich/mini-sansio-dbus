@@ -218,14 +218,14 @@ fn main() -> Result<()> {
 #[derive(Clone)]
 struct PrimaryConnection;
 impl Property for PrimaryConnection {
-    type Output = String;
+    type Output<'a> = String;
 
     const DESTINATION: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
     const PATH: Conf<str, Self> = Conf::constant("/org/freedesktop/NetworkManager");
     const INTERFACE: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
     const PROPERTY_NAME: Conf<str, Self> = Conf::constant("PrimaryConnection");
 
-    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError> {
+    fn map(value: IncomingValue<'_>) -> Result<Self::Output<'_>, DBusError> {
         value_is!(value, IncomingValue::ObjectPath(value));
         Ok(value.to_string())
     }
@@ -236,7 +236,7 @@ struct ConnId {
     conn_path: String,
 }
 impl Property for ConnId {
-    type Output = String;
+    type Output<'a> = String;
 
     const DESTINATION: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
     const PATH: Conf<str, Self> = Conf::dynamic(|this| this.conn_path.as_str());
@@ -244,7 +244,7 @@ impl Property for ConnId {
         Conf::constant("org.freedesktop.NetworkManager.Connection.Active");
     const PROPERTY_NAME: Conf<str, Self> = Conf::constant("Id");
 
-    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError> {
+    fn map(value: IncomingValue<'_>) -> Result<Self::Output<'_>, DBusError> {
         value_is!(value, IncomingValue::String(value));
         Ok(value.to_string())
     }

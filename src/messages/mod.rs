@@ -4,6 +4,9 @@ pub mod introspect;
 /// a module with built-in `DBus` request/response objects
 pub mod org_freedesktop_dbus;
 
+/// a module with built-in `NetworkManager` request/response objects
+pub mod network_manager;
+
 mod error_no_method;
 pub use error_no_method::ErrorNoMethod;
 

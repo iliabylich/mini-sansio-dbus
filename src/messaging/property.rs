@@ -11,7 +11,7 @@ use crate::{
 /// 2. subscribe and unsubscribe from its changes
 pub trait Property: Clone {
     /// Desired output
-    type Output;
+    type Output<'a>;
 
     /// Destination
     const DESTINATION: Conf<str, Self>;
@@ -27,7 +27,7 @@ pub trait Property: Clone {
     /// # Errors
     ///
     /// May return an error that will be returned form a `handle` method
-    fn map(value: IncomingValue<'_>) -> Result<Self::Output, DBusError>;
+    fn map(value: IncomingValue<'_>) -> Result<Self::Output<'_>, DBusError>;
 
     /// Subscribes
     ///
@@ -96,10 +96,10 @@ pub trait Property: Clone {
     /// # Errors
     ///
     /// Returns an error if given message is malformed.
-    fn handle_signal(
+    fn handle_signal<'a>(
         &self,
-        message: IncomingMessage<'_>,
-    ) -> Result<Option<Self::Output>, DBusError> {
+        message: IncomingMessage<'a>,
+    ) -> Result<Option<Self::Output<'a>>, DBusError> {
         if message.message_type != MessageType::Signal {
             return Ok(None);
         }
@@ -146,9 +146,12 @@ impl<T> HandleReply for T
 where
     T: Property,
 {
-    type Output = <Self as Property>::Output;
+    type Output<'a> = <Self as Property>::Output<'a>;
 
-    fn handle_reply_body(&self, mut body: IncomingBody<'_>) -> Result<Self::Output, DBusError> {
+    fn handle_reply_body<'a>(
+        &self,
+        mut body: IncomingBody<'a>,
+    ) -> Result<Self::Output<'a>, DBusError> {
         let item = body
             .try_next()?
             .ok_or(DBusError::Other("expected Body to have one value"))?;
@@ -235,10 +238,10 @@ where
     /// # Errors
     ///
     /// Returns an error if the message is invalid either as a matching reply or as a matching signal.
-    pub fn handle_reply_or_signal(
+    pub fn handle_reply_or_signal<'a>(
         &self,
-        message: IncomingMessage<'_>,
-    ) -> Result<Option<P::Output>, DBusError> {
+        message: IncomingMessage<'a>,
+    ) -> Result<Option<P::Output<'a>>, DBusError> {
         if let Some(out) = self.reply_handler.handle(message)? {
             Ok(Some(out))
         } else if let Some(out) = self.property.handle_signal(message)? {

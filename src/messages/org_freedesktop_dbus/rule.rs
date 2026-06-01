@@ -59,6 +59,7 @@ fn push(buf: &mut [u8], s: &str) -> Result<usize, EncodeError> {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::Rule;
 

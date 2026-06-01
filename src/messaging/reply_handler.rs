@@ -24,7 +24,10 @@ where
     /// # Errors
     ///
     /// Returns an error is message can't be parsed.
-    pub fn handle(&self, message: IncomingMessage<'_>) -> Result<Option<T::Output>, DBusError> {
+    pub fn handle<'a>(
+        &self,
+        message: IncomingMessage<'a>,
+    ) -> Result<Option<T::Output<'a>>, DBusError> {
         if message.reply_serial != Some(self.serial) {
             return Ok(None);
         }
@@ -40,12 +43,12 @@ where
 /// A reply handler trait, you should one your end
 pub trait HandleReply {
     /// Output that it generates based on the given reply body.
-    type Output;
+    type Output<'a>;
 
     /// Called by `ReplyHandler` IF reply serial matches and IF reply is not an error.
     ///
     /// # Errors
     ///
     /// Any error that is returned is propagated by `ReplyHandler` that wraps `Self`
-    fn handle_reply_body(&self, body: IncomingBody<'_>) -> Result<Self::Output, DBusError>;
+    fn handle_reply_body<'a>(&self, body: IncomingBody<'a>) -> Result<Self::Output<'a>, DBusError>;
 }
