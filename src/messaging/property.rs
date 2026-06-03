@@ -1,8 +1,7 @@
 use crate::{
     Conf, DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
-    OutgoingQueue,
     messages::org_freedesktop_dbus::{GetProperty, Subscribe, Unsubscribe},
-    messaging::reply_handler::{HandleReply, ReplyHandler},
+    messaging::reply_handler::HandleReply,
     value_is,
 };
 
@@ -29,63 +28,49 @@ pub trait Property: Clone {
     /// May return an error that will be returned form a `handle` method
     fn map(value: IncomingValue<'_>) -> Result<Self::Output<'_>, DBusError>;
 
-    /// Subscribes
+    /// Encodes "Subscribe" message
     ///
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    fn subscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let buf = Subscribe::encode(
+    fn encode_subscribe<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
+        Subscribe::encode(
             buf,
             Some(Self::DESTINATION.resolve(self)),
             Some(Self::PATH.resolve(self)),
             Some("org.freedesktop.DBus.Properties"),
             Some("PropertiesChanged"),
-        )?;
-        Ok(q.push_raw_buf(buf))
+        )
     }
 
-    /// Unsubscribes
+    /// Encodes "Unsubscribe" message
     ///
     /// # Errors
     ///
     /// Returns an error if given buffer is too short
-    fn unsubscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<u32, EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let buf = Unsubscribe::encode(
+    fn encode_unsubscribe<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
+        Unsubscribe::encode(
             buf,
             Some(Self::DESTINATION.resolve(self)),
             Some(Self::PATH.resolve(self)),
             Some("org.freedesktop.DBus.Properties"),
             Some("PropertiesChanged"),
-        )?;
-        Ok(q.push_raw_buf(buf))
+        )
     }
 
-    /// Pushes a get request into a given queue
+    /// Encodes "Get" request
     ///
     /// # Errors
     ///
     /// Returns an error if given buffer is too short.
-    fn get<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<ReplyHandler<Self>, EncodeError>
-    where
-        Self: HandleReply + Sized,
-        Q: OutgoingQueue,
-    {
-        let buf = GetProperty::encode(
+    fn encode_get<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
+        GetProperty::encode(
             buf,
             Self::DESTINATION.resolve(self),
             Self::PATH.resolve(self),
             Self::INTERFACE.resolve(self),
             Self::PROPERTY_NAME.resolve(self),
-        )?;
-        let serial = q.push_raw_buf(buf);
-        Ok(ReplyHandler::new(serial, self.clone()))
+        )
     }
 
     /// Parses incoming message and returns changed Property value if:
@@ -158,96 +143,5 @@ where
         value_is!(item, IncomingValue::Variant(item));
         let item = item.materialize()?;
         Self::map(item)
-    }
-}
-
-/// A helper struct to combine getting a property and subscribing to its changes at the same time
-pub struct PropertyGetAndSubscribe<P>
-where
-    P: Property,
-{
-    property: P,
-    reply_handler: ReplyHandler<P>,
-}
-
-impl<P> PropertyGetAndSubscribe<P>
-where
-    P: Property,
-{
-    /// Fires get + subscribe
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if either `Get` or `AddMatch` message doesn't fit into a buffer
-    pub fn get_and_subscribe<Q>(property: P, buf: &mut [u8], q: &mut Q) -> Result<Self, EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let reply_handler = property.get(buf, q)?;
-        let _ = property.subscribe(buf, q)?;
-        Ok(Self {
-            property,
-            reply_handler,
-        })
-    }
-
-    /// Fires get
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `Get` message doesn't fit into a buffer
-    pub fn get<Q>(property: P, buf: &mut [u8], q: &mut Q) -> Result<Self, EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let reply_handler = property.get(buf, q)?;
-        Ok(Self {
-            property,
-            reply_handler,
-        })
-    }
-
-    /// Fires subscribe
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `AddMatch` message doesn't fit into a buffer
-    pub fn subscribe<Q>(&self, buf: &mut [u8], q: &mut Q) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        self.property.subscribe(buf, q)?;
-        Ok(())
-    }
-
-    /// Fires unsubscribe
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `RemoveMatch` message doesn't fit into a buffer
-    pub fn unsubscribe<Q>(self, buf: &mut [u8], q: &mut Q) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        self.property.unsubscribe(buf, q)?;
-        Ok(())
-    }
-
-    /// Handles both reply and signal
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message is invalid either as a matching reply or as a matching signal.
-    pub fn handle_reply_or_signal<'a>(
-        &self,
-        message: IncomingMessage<'a>,
-    ) -> Result<Option<P::Output<'a>>, DBusError> {
-        if let Some(out) = self.reply_handler.handle(message)? {
-            Ok(Some(out))
-        } else if let Some(out) = self.property.handle_signal(message)? {
-            Ok(Some(out))
-        } else {
-            Ok(None)
-        }
     }
 }

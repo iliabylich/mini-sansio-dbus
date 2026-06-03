@@ -1,11 +1,16 @@
 use crate::{
-    DBusError, EncodeError, IncomingMessage, MessageType, OutgoingQueue,
+    EncodeError, IncomingMessage, MessageType,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
     messaging::DBusEncode,
 };
 
-struct SubscribeToNewIcon;
-impl DBusEncode for SubscribeToNewIcon {
+/// Subscribes to `NewIcon` signal
+///
+/// # Errors
+///
+/// Returns an error if message doesn't fit into given `buf`
+pub struct NewIconSubscribe;
+impl DBusEncode for NewIconSubscribe {
     type Args<'a> = &'a str;
 
     fn encode<'a>(address: Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
@@ -19,8 +24,13 @@ impl DBusEncode for SubscribeToNewIcon {
     }
 }
 
-struct UnsubscribeFromNewIcon;
-impl DBusEncode for UnsubscribeFromNewIcon {
+/// Unsubscribes from `NewIcon` signal
+///
+/// # Errors
+///
+/// Returns an error if message doesn't fit into given `buf`
+pub struct NewIconUnsubscribe;
+impl DBusEncode for NewIconUnsubscribe {
     type Args<'a> = &'a str;
 
     fn encode<'a>(address: Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
@@ -34,38 +44,10 @@ impl DBusEncode for UnsubscribeFromNewIcon {
     }
 }
 
-/// A helper struct to subscribe, unsubscribe, and handle `NewIconSignal` signal
+/// A helper struct to handle `NewIconSignal` signal
 pub struct NewIconSignal;
 
 impl NewIconSignal {
-    /// Subscribes
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given `buf`
-    pub fn subscribe<Q>(buf: &mut [u8], q: &mut Q, address: &str) -> Result<(), DBusError>
-    where
-        Q: OutgoingQueue,
-    {
-        let buf = SubscribeToNewIcon::encode(address, buf)?;
-        q.push_raw_buf(buf);
-        Ok(())
-    }
-
-    /// Unsubscribes
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given `buf`
-    pub fn unsubscribe<Q>(buf: &mut [u8], q: &mut Q, address: &str) -> Result<(), DBusError>
-    where
-        Q: OutgoingQueue,
-    {
-        let buf = UnsubscribeFromNewIcon::encode(address, buf)?;
-        q.push_raw_buf(buf);
-        Ok(())
-    }
-
     /// Returns true if given message represents a `NewIconSignal` signal
     #[must_use]
     pub fn matches(message: IncomingMessage<'_>, address: &str) -> bool {

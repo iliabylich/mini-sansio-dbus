@@ -1,6 +1,6 @@
 use anyhow::{Context as _, Result, ensure};
 use mini_sansio_dbus::{
-    Conf, DBusConnection, DBusError, DBusWants, IncomingMessage, IncomingValue,
+    Conf, DBusConnection, DBusError, DBusWants, IncomingMessage, IncomingValue, OutgoingQueue,
     messages::org_freedesktop_dbus::Hello, messaging::property::Property, value_is,
 };
 use rustix::{
@@ -25,7 +25,7 @@ impl PollDBus {
             .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"));
 
         Ok(Self {
-            conn: DBusConnection::new_system(&socket_path)?,
+            conn: DBusConnection::new_with_address(&socket_path)?,
             fd: None,
         })
     }
@@ -170,8 +170,10 @@ fn main() -> Result<()> {
     loop {
         match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
             ProcessResult::Connected => {
+                let mut buf = [0; 1_024];
+                let buf = PrimaryConnection.encode_get(&mut buf)?;
                 primary_connection_path_reply_handler =
-                    Some(PrimaryConnection.get(&mut [0; 1_024], &mut queue)?);
+                    Some(queue.push_raw_and_prepare_for_reply(PrimaryConnection, buf));
             }
             ProcessResult::ReadWrite {
                 message,
@@ -189,11 +191,13 @@ fn main() -> Result<()> {
                     {
                         log::info!("Primary connection: {primary_connection_path}");
 
+                        let mut buf = [0; 1_024];
                         let conn_id = ConnId {
                             conn_path: primary_connection_path,
                         };
+                        let buf = conn_id.encode_get(&mut buf)?;
                         primary_connection_id_reply_handler =
-                            Some(conn_id.get(&mut [0; 1_024], &mut queue)?);
+                            Some(queue.push_raw_and_prepare_for_reply(conn_id, buf));
                     }
 
                     if let Some(primary_connection_id_reply_handler) =

@@ -1,6 +1,6 @@
 use crate::{
-    DBusError, EncodeError, IncomingMessage, IntrospectibleObjectAt, IntrospectibleObjectAtRequest,
-    MessageType, OutgoingQueue, SliceMessageEncoder, dbus_body, messages::ErrorNoMethod,
+    EncodeError, IncomingMessage, IntrospectibleObjectAt, IntrospectibleObjectAtRequest,
+    MessageType, SliceMessageEncoder, dbus_body, messages::ErrorNoMethod,
 };
 
 /// Helper struct to handle introspection requests for (K)SNI host
@@ -23,83 +23,67 @@ impl StatusNotifierWatcherIntrospection {
         }
     }
 
-    fn reply_err<Q>(q: &mut Q, serial: u32, destination: &str) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let mut buf = [0; 1_024];
-        let buf = ErrorNoMethod::encode(&mut buf, destination, serial)?;
-        q.push_raw_buf(buf);
-        Ok(())
+    fn encode_reply_err<'a>(
+        buf: &'a mut [u8],
+        serial: u32,
+        destination: &str,
+    ) -> Result<&'a [u8], EncodeError> {
+        ErrorNoMethod::encode(buf, destination, serial)
     }
 
-    fn reply_with_body<Q>(
-        q: &mut Q,
+    fn encode_reply_with_body<'a>(
+        buf: &'a mut [u8],
         serial: u32,
         destination: &str,
         write_body: impl FnOnce(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,
-    ) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let mut buf = [0; 10 * 1_024];
-        let mut encoder = SliceMessageEncoder::new(&mut buf, MessageType::MethodReturn)?;
+    ) -> Result<&'a [u8], EncodeError> {
+        let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
         encoder.set_reply_serial(serial)?;
         encoder.set_destination(destination)?;
         write_body(&mut encoder)?;
         let len = encoder.finish()?;
-        let buf = buf.get(..len).ok_or(EncodeError::BufferTooSmall)?;
-        q.push_raw_buf(buf);
-        Ok(())
+        buf.get(..len).ok_or(EncodeError::BufferTooSmall)
     }
 
-    fn reply_protocol_version<Q>(
-        q: &mut Q,
+    fn encode_reply_protocol_version<'a>(
+        buf: &'a mut [u8],
         serial: u32,
         destination: &str,
-    ) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        Self::reply_with_body(q, serial, destination, |encoder| {
+    ) -> Result<&'a [u8], EncodeError> {
+        Self::encode_reply_with_body(buf, serial, destination, |encoder| {
             dbus_body!(encoder, { variant<i32>(42) });
             Ok(())
         })
     }
 
-    fn reply_is_host_registered<Q>(
-        q: &mut Q,
+    fn encode_reply_is_host_registered<'a>(
+        buf: &'a mut [u8],
         serial: u32,
         destination: &str,
-    ) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        Self::reply_with_body(q, serial, destination, |encoder| {
+    ) -> Result<&'a [u8], EncodeError> {
+        Self::encode_reply_with_body(buf, serial, destination, |encoder| {
             dbus_body!(encoder, { variant<bool>(true) });
             Ok(())
         })
     }
 
-    fn reply_registered_items<Q>(
-        q: &mut Q,
+    fn encode_reply_registered_items<'a>(
+        buf: &'a mut [u8],
         serial: u32,
         destination: &str,
-    ) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        Self::reply_with_body(q, serial, destination, |encoder| {
+    ) -> Result<&'a [u8], EncodeError> {
+        Self::encode_reply_with_body(buf, serial, destination, |encoder| {
             dbus_body!(encoder, { variant<array<str>> [] });
             Ok(())
         })
     }
 
-    fn reply_get_all<Q>(q: &mut Q, serial: u32, destination: &str) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        Self::reply_with_body(q, serial, destination, |encoder| {
+    fn encode_reply_get_all<'a>(
+        buf: &'a mut [u8],
+        serial: u32,
+        destination: &str,
+    ) -> Result<&'a [u8], EncodeError> {
+        Self::encode_reply_with_body(buf, serial, destination, |encoder| {
             encoder.set_body_signature("a{sv}")?;
             encoder.__dbus_begin_body()?;
 
@@ -134,48 +118,49 @@ impl StatusNotifierWatcherIntrospection {
     /// # Errors
     ///
     /// Message encoding can't fail here, but the request may be malformed or invalid.
-    pub fn handle<Q>(&self, q: &mut Q, message: IncomingMessage<'_>) -> Result<bool, DBusError>
-    where
-        Q: OutgoingQueue,
-    {
+    pub fn handle<'a>(
+        &self,
+        buf: &'a mut [u8],
+        message: IncomingMessage<'_>,
+    ) -> Result<Option<&'a [u8]>, EncodeError> {
         let Some((serial, sender, req)) = self.introspection.handle(message) else {
-            return Ok(false);
+            return Ok(None);
         };
 
         match req {
             IntrospectibleObjectAtRequest::Introspect { path } => match path {
                 "/" => {
-                    let mut buf = [0; 10 * 1_024];
-                    let mut encoder =
-                        SliceMessageEncoder::new(&mut buf, MessageType::MethodReturn)?;
+                    let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
                     encoder.set_reply_serial(serial)?;
                     encoder.set_destination(sender)?;
                     dbus_body!(&mut encoder, { str(ROOT_INTROSPECTION_XML) });
                     let len = encoder.finish()?;
                     let buf = buf.get(..len).ok_or(EncodeError::BufferTooSmall)?;
-                    q.push_raw_buf(buf);
+                    Ok(Some(buf))
                 }
                 "/StatusNotifierWatcher" => {
-                    let mut buf = [0; 10 * 1_024];
-                    let mut encoder =
-                        SliceMessageEncoder::new(&mut buf, MessageType::MethodReturn)?;
+                    let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
                     encoder.set_reply_serial(serial)?;
                     encoder.set_destination(sender)?;
                     dbus_body!(&mut encoder, { str(KSNI_INTROSPECTION_XML) });
                     let len = encoder.finish()?;
                     let buf = buf.get(..len).ok_or(EncodeError::BufferTooSmall)?;
-                    q.push_raw_buf(buf);
+                    Ok(Some(buf))
                 }
-                _ => Self::reply_err(q, serial, sender)?,
+                _ => {
+                    let buf = Self::encode_reply_err(buf, serial, sender)?;
+                    Ok(Some(buf))
+                }
             },
 
             IntrospectibleObjectAtRequest::GetAllProperties { path, interface } => {
-                match (path, interface) {
-                    ("/StatusNotifierWatcher", "org.kde.StatusNotifierWatcher") => {
-                        Self::reply_get_all(q, serial, sender)?;
-                    }
-
-                    _ => Self::reply_err(q, serial, sender)?,
+                if path == "/StatusNotifierWatcher" && interface == "org.kde.StatusNotifierWatcher"
+                {
+                    let buf = Self::encode_reply_get_all(buf, serial, sender)?;
+                    Ok(Some(buf))
+                } else {
+                    let buf = Self::encode_reply_err(buf, serial, sender)?;
+                    Ok(Some(buf))
                 }
             }
 
@@ -185,35 +170,42 @@ impl StatusNotifierWatcherIntrospection {
                 property_name,
             } => match (path, interface, property_name) {
                 ("/StatusNotifierWatcher", "org.kde.StatusNotifierWatcher", "ProtocolVersion") => {
-                    Self::reply_protocol_version(q, serial, sender)?;
+                    let buf = Self::encode_reply_protocol_version(buf, serial, sender)?;
+                    Ok(Some(buf))
                 }
 
                 (
                     "/StatusNotifierWatcher",
                     "org.kde.StatusNotifierWatcher",
                     "IsStatusNotifierHostRegistered",
-                ) => Self::reply_is_host_registered(q, serial, sender)?,
+                ) => {
+                    let buf = Self::encode_reply_is_host_registered(buf, serial, sender)?;
+                    Ok(Some(buf))
+                }
 
                 (
                     "/StatusNotifierWatcher",
                     "org.kde.StatusNotifierWatcher",
                     "RegisteredStatusNotifierItems",
-                ) => Self::reply_registered_items(q, serial, sender)?,
+                ) => {
+                    let buf = Self::encode_reply_registered_items(buf, serial, sender)?;
+                    Ok(Some(buf))
+                }
 
-                _ => Self::reply_err(q, serial, sender)?,
+                _ => {
+                    let buf = Self::encode_reply_err(buf, serial, sender)?;
+                    Ok(Some(buf))
+                }
             },
 
             IntrospectibleObjectAtRequest::Ping
             | IntrospectibleObjectAtRequest::GetMachineId
-            | IntrospectibleObjectAtRequest::SetProperty => Self::reply_err(q, serial, sender)?,
-
-            IntrospectibleObjectAtRequest::Error(err) => {
-                Self::reply_err(q, serial, sender)?;
-                return Err(err);
+            | IntrospectibleObjectAtRequest::SetProperty
+            | IntrospectibleObjectAtRequest::Error(_) => {
+                let buf = Self::encode_reply_err(buf, serial, sender)?;
+                Ok(Some(buf))
             }
         }
-
-        Ok(true)
     }
 }
 

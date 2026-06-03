@@ -1,13 +1,14 @@
 use crate::{
-    DBusError, EncodeError, IncomingMessage, IncomingValue, MessageType, OutgoingQueue,
+    DBusError, EncodeError, IncomingMessage, IncomingValue, MessageType,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
     messaging::DBusEncode,
     value_is,
 };
 
-struct SubscribeToNameOwnerChanged;
+/// Subscribes to `NameOwnerChanged` signal
+pub struct NameOwnerChangedSubscribe;
 
-impl DBusEncode for SubscribeToNameOwnerChanged {
+impl DBusEncode for NameOwnerChangedSubscribe {
     type Args<'a> = ();
 
     fn encode<'a>((): Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
@@ -21,9 +22,10 @@ impl DBusEncode for SubscribeToNameOwnerChanged {
     }
 }
 
-struct UbsubscribeFromNameOwnerChanged;
+/// Unsubscribes from `NameOwnerChanged` signal
+pub struct NameOwnerChangedUnsubscribe;
 
-impl DBusEncode for UbsubscribeFromNameOwnerChanged {
+impl DBusEncode for NameOwnerChangedUnsubscribe {
     type Args<'a> = ();
 
     fn encode<'a>((): Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
@@ -37,38 +39,10 @@ impl DBusEncode for UbsubscribeFromNameOwnerChanged {
     }
 }
 
-/// A helper struct to subscribe, unsubscribe, and handle incoming `NameOwnerChanged` signals
+/// A helper struct to handle incoming `NameOwnerChanged` signals
 pub struct NameOwnerChangedSignal;
 
 impl NameOwnerChangedSignal {
-    /// Subscribes
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if given `buf` is too short
-    pub fn subscribe<Q>(buf: &mut [u8], q: &mut Q) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let buf = SubscribeToNameOwnerChanged::encode((), buf)?;
-        q.push_raw_buf(buf);
-        Ok(())
-    }
-
-    /// Unsubscribes
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if given `buf` is too short
-    pub fn unsubscribe<Q>(buf: &mut [u8], q: &mut Q) -> Result<(), EncodeError>
-    where
-        Q: OutgoingQueue,
-    {
-        let buf = UbsubscribeFromNameOwnerChanged::encode((), buf)?;
-        q.push_raw_buf(buf);
-        Ok(())
-    }
-
     /// Parses `messages` and if it represents a `NameOwnedChanged` signal returns freed name.
     ///
     /// # Errors

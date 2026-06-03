@@ -43,24 +43,14 @@ impl DBusConnection {
 
     /// Constructs a new session connection
     ///
-    /// Takes `address` which is usually `$DBUS_SESSION_BUS_ADDRESS`.
+    /// Takes `address` which is usually either:
+    /// 1. session: `$DBUS_SESSION_BUS_ADDRESS`
+    /// 2. system: `$DBUS_SYSTEM_BUS_ADDRESS` or `/var/run/dbus/system_bus_socket`
     ///
     /// # Errors
     ///
     /// Fails if given address contains NULL.
-    pub fn new_session(address: &str) -> Result<Self, DBusError> {
-        let addr = SocketAddrUnix::new(address).map_err(|_| DBusError::DBusPathWithNull)?;
-        Ok(Self::new(addr))
-    }
-
-    /// Constructs a new system connection
-    ///
-    /// Takes `address` which is usually either `$DBUS_SYSTEM_BUS_ADDRESS` or `/var/run/dbus/system_bus_socket`.
-    ///
-    /// # Errors
-    ///
-    /// Fails if given address contains NULL.
-    pub fn new_system(address: &str) -> Result<Self, DBusError> {
+    pub fn new_with_address(address: &str) -> Result<Self, DBusError> {
         let addr = SocketAddrUnix::new(address).map_err(|_| DBusError::DBusPathWithNull)?;
         Ok(Self::new(addr))
     }

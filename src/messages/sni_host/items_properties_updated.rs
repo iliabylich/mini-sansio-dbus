@@ -1,20 +1,20 @@
 use crate::{
-    DBusError, EncodeError, IncomingMessage, MessageType, OutgoingQueue,
+    EncodeError, IncomingMessage, MessageType,
     messages::org_freedesktop_dbus::{Subscribe, Unsubscribe},
     messaging::DBusEncode,
 };
 
-struct ItemsPropertiesUpdatedArgs<'a> {
-    address: &'a str,
-    path: &'a str,
-}
-
-struct SubscribeToItemsPropertiesUpdated;
-impl DBusEncode for SubscribeToItemsPropertiesUpdated {
-    type Args<'a> = ItemsPropertiesUpdatedArgs<'a>;
+/// Subscribes to `ItemsPropertiesUpdated` signal
+///
+/// # Errors
+///
+/// Returns an error if message doesn't fit into given `buf`
+pub struct ItemsPropertiesUpdatedSubscribe;
+impl DBusEncode for ItemsPropertiesUpdatedSubscribe {
+    type Args<'a> = (&'a str, &'a str);
 
     fn encode<'a>(
-        ItemsPropertiesUpdatedArgs { address, path }: Self::Args<'_>,
+        (address, path): Self::Args<'_>,
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         Subscribe::encode(
@@ -27,12 +27,17 @@ impl DBusEncode for SubscribeToItemsPropertiesUpdated {
     }
 }
 
-struct UnsubscribeFromItemsPropertiesUpdated;
-impl DBusEncode for UnsubscribeFromItemsPropertiesUpdated {
-    type Args<'a> = ItemsPropertiesUpdatedArgs<'a>;
+/// Unsubscribes from `ItemsPropertiesUpdated` signal
+///
+/// # Errors
+///
+/// Returns an error if message doesn't fit into given `buf`
+pub struct ItemsPropertiesUpdatedUnsubscribe;
+impl DBusEncode for ItemsPropertiesUpdatedUnsubscribe {
+    type Args<'a> = (&'a str, &'a str);
 
     fn encode<'a>(
-        ItemsPropertiesUpdatedArgs { address, path }: Self::Args<'_>,
+        (address, path): Self::Args<'_>,
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         Unsubscribe::encode(
@@ -45,49 +50,9 @@ impl DBusEncode for UnsubscribeFromItemsPropertiesUpdated {
     }
 }
 
-/// A helper struct to subscribe, unsubscribe, and handle `ItemsPropertiesUpdated` signal
+/// A helper struct to handle `ItemsPropertiesUpdated` signal
 pub struct ItemsPropertiesUpdatedSignal;
 impl ItemsPropertiesUpdatedSignal {
-    /// Subscribes
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given `buf`
-    pub fn subscribe<Q>(
-        buf: &mut [u8],
-        q: &mut Q,
-        address: &str,
-        path: &str,
-    ) -> Result<(), DBusError>
-    where
-        Q: OutgoingQueue,
-    {
-        let args = ItemsPropertiesUpdatedArgs { address, path };
-        let buf = SubscribeToItemsPropertiesUpdated::encode(args, buf)?;
-        q.push_raw_buf(buf);
-        Ok(())
-    }
-
-    /// Unsubscribes
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given `buf`
-    pub fn unsubscribe<Q>(
-        buf: &mut [u8],
-        q: &mut Q,
-        address: &str,
-        path: &str,
-    ) -> Result<(), DBusError>
-    where
-        Q: OutgoingQueue,
-    {
-        let args = ItemsPropertiesUpdatedArgs { address, path };
-        let buf = UnsubscribeFromItemsPropertiesUpdated::encode(args, buf)?;
-        q.push_raw_buf(buf);
-        Ok(())
-    }
-
     /// Returns true if given message represents an `ItemsPropertiesUpdated` signal
     #[must_use]
     pub fn matches(message: IncomingMessage<'_>, address: &str, path: &str) -> bool {

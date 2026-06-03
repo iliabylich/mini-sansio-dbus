@@ -33,25 +33,31 @@ impl ExampleQueue {
     pub(crate) fn push_and_prepare_for_reply<M>(
         &mut self,
         message: M,
-        data: M::Args<'_>,
+        args: M::Args<'_>,
     ) -> Result<ReplyHandler<M>, EncodeError>
     where
         M: DBusEncode + HandleReply,
     {
-        OutgoingQueue::push_and_prepare_for_reply::<1_024, M>(self, message, data)
+        let mut buf = [0; 1_024];
+        let buf = M::encode(args, &mut buf)?;
+        let handler = self.push_raw_and_prepare_for_reply(message, buf);
+        Ok(handler)
     }
 
     #[allow(dead_code)]
-    pub(crate) fn push_and_discard_reply<M>(&mut self, data: M::Args<'_>) -> Result<(), EncodeError>
+    pub(crate) fn push_and_discard_reply<M>(&mut self, args: M::Args<'_>) -> Result<(), EncodeError>
     where
         M: DBusEncode,
     {
-        OutgoingQueue::push_and_discard_reply::<1_024, M>(self, data)
+        let mut buf = [0; 1_024];
+        let buf = M::encode(args, &mut buf)?;
+        let _ = self.push_raw(buf);
+        Ok(())
     }
 }
 
 impl OutgoingQueue for ExampleQueue {
-    fn push_raw_buf(&mut self, message: &[u8]) -> u32 {
+    fn push_raw(&mut self, message: &[u8]) -> u32 {
         let serial = self.next_serial();
         let mut message = message.to_vec();
         DBusSerial::write_to_message(&mut message, serial).unwrap();

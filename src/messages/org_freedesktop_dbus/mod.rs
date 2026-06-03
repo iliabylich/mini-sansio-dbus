@@ -14,7 +14,9 @@ pub use add_match::AddMatch;
 pub use get_all_properties::GetAllProperties;
 pub use get_property::GetProperty;
 pub use hello::Hello;
-pub use name_owner_changed::NameOwnerChangedSignal;
+pub use name_owner_changed::{
+    NameOwnerChangedSignal, NameOwnerChangedSubscribe, NameOwnerChangedUnsubscribe,
+};
 pub use remove_match::RemoveMatch;
 pub use request_name::RequestName;
 pub use set_property::SetProperty;

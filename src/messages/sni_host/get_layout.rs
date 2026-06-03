@@ -1,18 +1,10 @@
 use crate::{
     DBusError, EncodeError, IncomingArrayValue, IncomingBody, IncomingValue, MessageType,
-    OutgoingQueue, SliceMessageEncoder, dbus_body,
-    messaging::{
-        DBusEncode,
-        reply_handler::{HandleReply, ReplyHandler},
-    },
+    SliceMessageEncoder, dbus_body,
+    messaging::{DBusEncode, reply_handler::HandleReply},
     value_is,
 };
 use core::marker::PhantomData;
-
-pub struct GetLayoutArgs<'a> {
-    destination: &'a str,
-    path: &'a str,
-}
 
 /// A helper struct that send and handle reply of `GetLayout` method call
 #[derive(Clone)]
@@ -22,7 +14,7 @@ where
     I: GetLayoutItem<List = L>,
     D: AsRef<str> + Clone,
 {
-    service: D,
+    destination: D,
     _marker: PhantomData<(L, I)>,
 }
 
@@ -32,10 +24,10 @@ where
     I: GetLayoutItem<List = L>,
     D: AsRef<str> + Clone,
 {
-    type Args<'a> = GetLayoutArgs<'a>;
+    type Args<'a> = (&'a str, &'a str);
 
     fn encode<'a>(
-        GetLayoutArgs { destination, path }: Self::Args<'_>,
+        (destination, path): Self::Args<'_>,
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
@@ -70,31 +62,12 @@ where
     I: GetLayoutItem<List = L>,
     D: AsRef<str> + Clone,
 {
-    /// Sends a request
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message doesn't fit into given `buf`
-    pub fn send<Q>(
-        buf: &mut [u8],
-        q: &mut Q,
-        service: D,
-        path: &str,
-    ) -> Result<ReplyHandler<Self>, DBusError>
-    where
-        Q: OutgoingQueue,
-    {
-        let message = Self {
-            service: service.clone(),
+    /// Constructor
+    pub const fn new(destination: D) -> Self {
+        Self {
+            destination,
             _marker: PhantomData,
-        };
-        let args = GetLayoutArgs {
-            destination: service.as_ref(),
-            path,
-        };
-        let buf = Self::encode(args, buf)?;
-        let serial = q.push_raw_buf(buf);
-        Ok(ReplyHandler::new(serial, message))
+        }
     }
 }
 
@@ -120,7 +93,7 @@ where
 
         value_is!(top_level_items, IncomingValue::Array(top_level_items));
 
-        parse_items(self.service.as_ref(), &top_level_items)
+        parse_items(self.destination.as_ref(), &top_level_items)
     }
 }
 

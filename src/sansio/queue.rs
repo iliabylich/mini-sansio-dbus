@@ -1,9 +1,6 @@
 use crate::{
     EncodeError,
-    messaging::{
-        DBusEncode,
-        reply_handler::{HandleReply, ReplyHandler},
-    },
+    messaging::reply_handler::{HandleReply, ReplyHandler},
 };
 
 /// Allocates outgoing D-Bus message serials.
@@ -53,43 +50,15 @@ impl Default for DBusSerial {
 /// A caller-owned queue of encoded outgoing messages.
 pub trait OutgoingQueue {
     /// Pushes encoded message bytes after writing the next D-Bus serial into the header.
-    fn push_raw_buf(&mut self, message: &[u8]) -> u32;
+    fn push_raw(&mut self, buf: &[u8]) -> u32;
 
-    /// High-level wrapper to encode -> push -> prepare for reply
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message is too short to contain encoded message
-    fn push_and_prepare_for_reply<const N: usize, M>(
-        &mut self,
-        message: M,
-        args: M::Args<'_>,
-    ) -> Result<ReplyHandler<M>, EncodeError>
+    /// Pushes encoded message bytes after writing the next D-Bus serial into the header.
+    fn push_raw_and_prepare_for_reply<H>(&mut self, handler: H, buf: &[u8]) -> ReplyHandler<H>
     where
-        M: DBusEncode + HandleReply,
+        H: HandleReply,
     {
-        let mut buf = [0; N];
-        let buf = M::encode(args, &mut buf)?;
-        let serial = Self::push_raw_buf(self, buf);
-        Ok(ReplyHandler::new(serial, message))
-    }
-
-    /// High-level wrapper to encode -> push -> discard reply
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message is too short to contain encoded message
-    fn push_and_discard_reply<const N: usize, M>(
-        &mut self,
-        args: M::Args<'_>,
-    ) -> Result<(), EncodeError>
-    where
-        M: DBusEncode,
-    {
-        let mut buf = [0; N];
-        let buf = M::encode(args, &mut buf)?;
-        let _serial = Self::push_raw_buf(self, buf);
-        Ok(())
+        let serial = Self::push_raw(self, buf);
+        ReplyHandler::new(serial, handler)
     }
 
     /// Returns the first queued message.
