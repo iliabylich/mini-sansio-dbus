@@ -1,198 +1,97 @@
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Result, ensure};
 use mini_sansio_dbus::{
-    Conf, DBusConnection, DBusError, DBusWants, IncomingMessage, IncomingValue, OutgoingQueue,
-    messages::org_freedesktop_dbus::Hello, messaging::property::Property, value_is,
+    Conf, DBusConnection, DBusConnector, DBusConnectorWants, DBusError, IncomingValue,
+    OutgoingQueue, messages::org_freedesktop_dbus::Hello, messaging::property::Property, value_is,
 };
 use rustix::{
     event::{PollFd, PollFlags},
-    io::Errno,
+    net::{AddressFamily, SocketAddrUnix, SocketType},
 };
-use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+use std::io::ErrorKind;
 
 mod queue;
 use queue::ExampleQueue;
 
-struct PollDBus {
-    conn: DBusConnection,
-    fd: Option<OwnedFd>,
-}
+fn main() -> Result<()> {
+    let address = std::env::var("DBUS_SYSTEM_BUS_ADDRESS")
+        .ok()
+        .and_then(|address| address.split_once('=').map(|(_, path)| path.to_string()))
+        .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"));
+    let address = SocketAddrUnix::new(address)?;
 
-impl PollDBus {
-    fn new() -> Result<Self> {
-        let socket_path = std::env::var("DBUS_SYSTEM_BUS_ADDRESS")
-            .ok()
-            .and_then(|address| address.split_once('=').map(|(_, path)| path.to_string()))
-            .unwrap_or_else(|| String::from("/var/run/dbus/system_bus_socket"));
+    println!("socket()");
+    let fd = rustix::net::socket(AddressFamily::UNIX, SocketType::STREAM, None)?;
+    println!("connect()");
+    rustix::net::connect(&fd, &address)?;
 
-        Ok(Self {
-            conn: DBusConnection::new_with_address(&socket_path)?,
-            fd: None,
-        })
-    }
+    let mut readbuf = [0; 1_024];
 
-    fn process_until_blocked_or_message_received<'a>(
-        &'a mut self,
-        queue: &mut ExampleQueue,
-        readerbuf: &'a mut [u8],
-    ) -> Result<ProcessResult<'a>> {
-        loop {
-            let wants = self
-                .conn
-                .wants(queue, readerbuf)?
-                .context("DBus wants nothing")?;
-
-            match wants {
-                DBusWants::Socket { domain, r#type, .. } => {
-                    log::info!("starting socket()");
-                    let fd = rustix::net::socket(domain, r#type, None)?;
-                    self.fd = Some(fd);
-                    log::info!("socket() succeeded");
-                    self.conn.satisfy_socket()?;
-                }
-                DBusWants::Connect { addr, .. } => {
-                    log::info!("starting connect()");
-                    rustix::net::connect(self.fd.as_ref().context("no FD")?, &addr)?;
-                    log::info!("connect() succeeded");
-                    self.conn.satisfy_connect()?;
-                    return Ok(ProcessResult::Connected);
-                }
-                DBusWants::Read { buf, .. } => {
-                    match rustix::io::read(self.fd.as_ref().context("no FD")?, buf) {
-                        Ok(len) => {
-                            let message = self.conn.satisfy_read(len, readerbuf)?;
-                            return Ok(ProcessResult::ReadWrite {
-                                message,
-                                blocked_on: None,
-                            });
-                        }
-                        Err(Errno::WOULDBLOCK) => {
-                            return Ok(ProcessResult::ReadWrite {
-                                message: None,
-                                blocked_on: Some((
-                                    self.fd.as_ref().context("no FD")?.as_fd(),
-                                    PollFlags::IN,
-                                )),
-                            });
-                        }
-                        Err(err) => return Err(err.into()),
-                    }
-                }
-                DBusWants::Write { buf, .. } => {
-                    match rustix::io::write(self.fd.as_ref().context("no FD")?, buf) {
-                        Ok(len) => {
-                            self.conn.satisfy_write(len, queue)?;
-                        }
-                        Err(Errno::WOULDBLOCK) => {
-                            return Ok(ProcessResult::ReadWrite {
-                                message: None,
-                                blocked_on: Some((
-                                    self.fd.as_ref().context("no FD")?.as_fd(),
-                                    PollFlags::OUT,
-                                )),
-                            });
-                        }
-                        Err(err) => return Err(err.into()),
-                    }
-                }
-                DBusWants::ReadWrite {
-                    readbuf, writebuf, ..
-                } => {
-                    let mut blocked_on_write = false;
-
-                    let write_res = rustix::io::write(self.fd.as_ref().context("no FD")?, writebuf);
-                    let read_res = rustix::io::read(self.fd.as_ref().context("no FD")?, readbuf);
-
-                    match write_res {
-                        Ok(len) => {
-                            self.conn.satisfy_write(len, queue)?;
-                        }
-                        Err(Errno::WOULDBLOCK) => blocked_on_write = true,
-                        Err(err) => return Err(err.into()),
-                    }
-
-                    match read_res {
-                        Ok(len) => {
-                            let message = self.conn.satisfy_read(len, readerbuf)?;
-
-                            return Ok(ProcessResult::ReadWrite {
-                                message,
-                                blocked_on: if blocked_on_write {
-                                    Some((
-                                        self.fd.as_ref().context("no FD")?.as_fd(),
-                                        PollFlags::OUT,
-                                    ))
-                                } else {
-                                    None
-                                },
-                            });
-                        }
-                        Err(Errno::WOULDBLOCK) => {
-                            return Ok(ProcessResult::ReadWrite {
-                                message: None,
-                                blocked_on: if blocked_on_write {
-                                    Some((
-                                        self.fd.as_ref().context("no FD")?.as_fd(),
-                                        PollFlags::IN | PollFlags::OUT,
-                                    ))
-                                } else {
-                                    None
-                                },
-                            });
-                        }
-                        Err(err) => return Err(err.into()),
-                    }
+    let mut connector = DBusConnector::new();
+    let seq = loop {
+        let wants = connector.wants(&mut readbuf)?;
+        match wants {
+            DBusConnectorWants::Read { buf, .. } => {
+                println!("read({})", buf.len());
+                let len = rustix::io::read(&fd, buf)?;
+                connector.satisfy_read(len, &mut readbuf)?;
+            }
+            DBusConnectorWants::Write { buf, .. } => {
+                println!("write({})", buf.len());
+                let len = rustix::io::write(&fd, buf)?;
+                if let Some(seq) = connector.satisfy_write(len)? {
+                    break seq;
                 }
             }
         }
-    }
-}
+    };
+    println!("Connected!");
+    drop(connector);
 
-enum ProcessResult<'a> {
-    Connected,
-    ReadWrite {
-        message: Option<IncomingMessage<'a>>,
-        blocked_on: Option<(BorrowedFd<'a>, PollFlags)>,
-    },
-}
-
-fn main() -> Result<()> {
-    pretty_env_logger::init();
-
-    let mut dbus = PollDBus::new()?;
     let mut queue = ExampleQueue::new();
-    let mut readerbuf = [0; 1_024];
-
     queue.push_and_discard_reply::<Hello>(())?;
-
-    let mut primary_connection_path_reply_handler = None;
+    let primary_connection_path_reply_handler = {
+        let mut buf = [0; 1_024];
+        let buf = PrimaryConnection.encode_get(&mut buf)?;
+        queue.push_raw_and_prepare_for_reply(PrimaryConnection, buf)
+    };
     let mut primary_connection_id_reply_handler = None;
 
-    loop {
-        match dbus.process_until_blocked_or_message_received(&mut queue, &mut readerbuf)? {
-            ProcessResult::Connected => {
-                let mut buf = [0; 1_024];
-                let buf = PrimaryConnection.encode_get(&mut buf)?;
-                primary_connection_path_reply_handler =
-                    Some(queue.push_raw_and_prepare_for_reply(PrimaryConnection, buf));
-            }
-            ProcessResult::ReadWrite {
-                message,
-                blocked_on,
-            } => {
-                if let Some(message) = message {
-                    let mut buf = String::new();
-                    message.log(&mut buf)?;
-                    eprintln!("{buf}");
+    let mut dbus = DBusConnection::new(seq);
+    println!("set_nonblocking()");
+    rustix::io::ioctl_fionbio(&fd, true)?;
 
-                    if let Some(primary_connection_path_reply_handler) =
-                        primary_connection_path_reply_handler.as_ref()
-                        && let Some(primary_connection_path) =
-                            primary_connection_path_reply_handler.handle(message)?
+    loop {
+        let (read, write) = dbus.wants(&mut queue, &mut readbuf)?;
+
+        let mut poll_flags = PollFlags::empty();
+
+        if let Some(write) = write {
+            println!("write({})", write.buf.len());
+
+            match rustix::io::write(&fd, write.buf) {
+                Ok(len) => dbus.satisfy_write(len, &mut queue)?,
+                Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                    poll_flags |= PollFlags::OUT;
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
+
+        println!("read({})", read.buf.len());
+        match rustix::io::read(&fd, read.buf) {
+            Ok(len) => {
+                if let Some(message) = dbus.satisfy_read(len, &mut readbuf)? {
+                    let mut s = String::new();
+                    message.log(&mut s)?;
+                    println!("{s}");
+
+                    if let Some(primary_connection_path) =
+                        primary_connection_path_reply_handler.handle(message)?
                     {
-                        log::info!("Primary connection: {primary_connection_path}");
+                        println!("Primary connection: {primary_connection_path}");
 
                         let mut buf = [0; 1_024];
-                        let conn_id = ConnId {
+                        let conn_id = ConnectionId {
                             conn_path: primary_connection_path,
                         };
                         let buf = conn_id.encode_get(&mut buf)?;
@@ -204,17 +103,25 @@ fn main() -> Result<()> {
                         primary_connection_id_reply_handler.as_ref()
                         && let Some(id) = primary_connection_id_reply_handler.handle(message)?
                     {
-                        log::info!("Primary connection ID: {id}");
+                        println!("Primary connection ID: {id}");
                         break;
                     }
                 }
-
-                if let Some((fd, events)) = blocked_on {
-                    poll(fd, events)?;
-                }
             }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                poll_flags |= PollFlags::IN;
+            }
+            Err(err) => return Err(err.into()),
+        }
+
+        if !poll_flags.is_empty() {
+            println!("poll({:?})", poll_flags);
+            let mut pollfds = [PollFd::new(&fd, poll_flags)];
+            let ready = rustix::event::poll(&mut pollfds, None)?;
+            ensure!(ready > 0);
         }
     }
+    println!("Connected to DBus!");
 
     Ok(())
 }
@@ -236,10 +143,10 @@ impl Property for PrimaryConnection {
 }
 
 #[derive(Clone)]
-struct ConnId {
+struct ConnectionId {
     conn_path: String,
 }
-impl Property for ConnId {
+impl Property for ConnectionId {
     type Output<'a> = String;
 
     const DESTINATION: Conf<str, Self> = Conf::constant("org.freedesktop.NetworkManager");
@@ -252,12 +159,4 @@ impl Property for ConnId {
         value_is!(value, IncomingValue::String(value));
         Ok(value.to_string())
     }
-}
-
-fn poll(fd: BorrowedFd<'_>, events: PollFlags) -> Result<()> {
-    let mut pollfds = [PollFd::new(&fd, events)];
-    let ready = rustix::event::poll(&mut pollfds, None)?;
-    ensure!(ready > 0);
-    log::info!("poll() finished()");
-    Ok(())
 }

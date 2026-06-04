@@ -1,9 +1,8 @@
-use crate::{DBusError, DBusWants, IncomingMessage};
-use connector::DBusConnector;
+use crate::{DBusError, DBusWantsRead, DBusWantsWrite, IncomingMessage};
 use reader::DBusReader;
-use rustix::net::SocketAddrUnix;
 use writer::DBusWriter;
 
+pub use connector::DBusConnector;
 pub use queue::{DBusSerial, OutgoingQueue};
 
 mod connector;
@@ -14,50 +13,22 @@ mod writer;
 /// A `DBus` connection, the main type
 #[must_use]
 pub struct DBusConnection {
-    state: State,
-}
-
-enum State {
-    Connecting(DBusConnector),
-    Ready {
-        reader: DBusReader,
-        writer: DBusWriter,
-    },
+    reader: DBusReader,
+    writer: DBusWriter,
 }
 
 impl DBusConnection {
-    const fn new(addr: SocketAddrUnix) -> Self {
+    /// Constructor
+    pub const fn new(seq: u64) -> Self {
         Self {
-            state: State::Connecting(DBusConnector::new(addr)),
+            reader: DBusReader::new(seq),
+            writer: DBusWriter::new(seq),
         }
-    }
-
-    /// Constructs a dummy connection that doesn't "want" anything from you
-    ///
-    /// Can be used as a fallback if things go wrong.
-    pub fn dummy() -> Self {
-        Self {
-            state: State::Connecting(DBusConnector::dummy()),
-        }
-    }
-
-    /// Constructs a new session connection
-    ///
-    /// Takes `address` which is usually either:
-    /// 1. session: `$DBUS_SESSION_BUS_ADDRESS`
-    /// 2. system: `$DBUS_SYSTEM_BUS_ADDRESS` or `/var/run/dbus/system_bus_socket`
-    ///
-    /// # Errors
-    ///
-    /// Fails if given address contains NULL.
-    pub fn new_with_address(address: &str) -> Result<Self, DBusError> {
-        let addr = SocketAddrUnix::new(address).map_err(|_| DBusError::DBusPathWithNull)?;
-        Ok(Self::new(addr))
     }
 
     /// Returns what connection wants at the moment
     ///
-    /// Returned value must be parsed and converted to a syscall of some sort
+    /// Returned values must be parsed and converted to syscalls of some sort
     ///
     /// # Errors
     ///
@@ -66,67 +37,14 @@ impl DBusConnection {
         &mut self,
         queue: &'w Q,
         readbuf: &'r mut [u8],
-    ) -> Result<Option<DBusWants<'r, 'w>>, DBusError>
+    ) -> Result<(DBusWantsRead<'r>, Option<DBusWantsWrite<'w>>), DBusError>
     where
         Q: OutgoingQueue,
     {
-        match &mut self.state {
-            State::Connecting(connector) => connector.wants(readbuf),
-            State::Ready { reader, writer } => {
-                match (reader.wants(readbuf)?, writer.wants(queue)?) {
-                    (
-                        Some(DBusWants::Read {
-                            buf: readbuf,
-                            seq: readseq,
-                        }),
-                        Some(DBusWants::Write {
-                            buf: writebuf,
-                            seq: writeseq,
-                            ..
-                        }),
-                    ) => Ok(Some(DBusWants::ReadWrite {
-                        readbuf,
-                        readseq,
-                        writebuf,
-                        writeseq,
-                    })),
+        let read = self.reader.wants(readbuf)?;
+        let write = self.writer.wants(queue)?;
 
-                    (read, None) => Ok(read),
-                    (None, write) => Ok(write),
-                    other => {
-                        unreachable!("bug: DBus reader/writer never want {other:?}")
-                    }
-                }
-            }
-        }
-    }
-
-    /// Notifies about completion of a `socket()` operation
-    ///
-    /// # Errors
-    ///
-    /// Fails is operation is not the one that was last returned from `wants`
-    pub fn satisfy_socket(&mut self) -> Result<(), DBusError> {
-        let State::Connecting(connector) = &mut self.state else {
-            return Err(DBusError::InternalError);
-        };
-
-        connector.satisfy_socket()?;
-        Ok(())
-    }
-
-    /// Notifies about completion of a `connect()` operation
-    ///
-    /// # Errors
-    ///
-    /// Fails is operation is not the one that was last returned from `wants`
-    pub fn satisfy_connect(&mut self) -> Result<(), DBusError> {
-        let State::Connecting(connector) = &mut self.state else {
-            return Err(DBusError::InternalError);
-        };
-
-        connector.satisfy_connect()?;
-        Ok(())
+        Ok((read, write))
     }
 
     /// Notifies about completion of a `read()` operation
@@ -139,22 +57,14 @@ impl DBusConnection {
         len: usize,
         readbuf: &'r [u8],
     ) -> Result<Option<IncomingMessage<'r>>, DBusError> {
-        match &mut self.state {
-            State::Connecting(connector) => {
-                connector.satisfy_read(len, readbuf)?;
-                Ok(None)
-            }
-            State::Ready { reader, .. } => {
-                let Some(len) = reader.satisfy_read(len, readbuf)? else {
-                    return Ok(None);
-                };
+        let Some(len) = self.reader.satisfy_read(len, readbuf)? else {
+            return Ok(None);
+        };
 
-                let buf = readbuf.get(..len).ok_or(DBusError::InternalError)?;
+        let buf = readbuf.get(..len).ok_or(DBusError::InternalError)?;
 
-                let message = IncomingMessage::new(buf)?;
-                Ok(Some(message))
-            }
-        }
+        let message = IncomingMessage::new(buf)?;
+        Ok(Some(message))
     }
 
     /// Notifies about completion of a `write()` operation
@@ -166,31 +76,7 @@ impl DBusConnection {
     where
         Q: OutgoingQueue,
     {
-        match &mut self.state {
-            State::Connecting(connector) => {
-                if let Some(seq) = connector.satisfy_write(len)? {
-                    self.state = State::Ready {
-                        reader: DBusReader::new(seq),
-                        writer: DBusWriter::new(seq),
-                    };
-                }
-                Ok(())
-            }
-            State::Ready { writer, .. } => {
-                writer.satisfy_write(len, queue)?;
-                Ok(())
-            }
-        }
-    }
-
-    /// Stops connection
-    pub const fn stop(&mut self) {
-        match &mut self.state {
-            State::Connecting(connector) => connector.stop(),
-            State::Ready { reader, writer } => {
-                reader.stop();
-                writer.stop();
-            }
-        }
+        self.writer.satisfy_write(len, queue)?;
+        Ok(())
     }
 }

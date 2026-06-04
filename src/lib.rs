@@ -24,7 +24,6 @@ mod error;
 mod incoming;
 mod introspectible_object_at;
 mod sansio;
-mod satisfy;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -44,7 +43,6 @@ pub use incoming::{
     IncomingVariantValue,
 };
 pub use introspectible_object_at::{IntrospectibleObjectAt, IntrospectibleObjectAtRequest};
-pub use sansio::{DBusConnection, DBusSerial, OutgoingQueue};
-pub use satisfy::DBusSatisfy;
+pub use sansio::{DBusConnection, DBusConnector, DBusSerial, OutgoingQueue};
 pub use types::MessageType;
-pub use wants::DBusWants;
+pub use wants::{DBusConnectorWants, DBusWantsRead, DBusWantsWrite};

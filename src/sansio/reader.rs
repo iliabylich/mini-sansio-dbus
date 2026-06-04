@@ -1,4 +1,4 @@
-use crate::{DBusError, DBusWants, types::Header};
+use crate::{DBusError, DBusWantsRead, types::Header};
 
 const HEADER_LEN: usize = size_of::<Header>();
 
@@ -16,7 +16,6 @@ enum State {
         message_len: usize,
         bytes_read: usize,
     },
-    Dead,
 }
 
 impl DBusReader {
@@ -27,19 +26,16 @@ impl DBusReader {
         }
     }
 
-    pub(crate) fn wants<'r>(
-        &self,
-        buf: &'r mut [u8],
-    ) -> Result<Option<DBusWants<'r, 'static>>, DBusError> {
+    pub(crate) fn wants<'r>(&self, buf: &'r mut [u8]) -> Result<DBusWantsRead<'r>, DBusError> {
         match self.state {
             State::ReadHeader { bytes_read } => {
                 let remainder = buf
                     .get_mut(bytes_read..HEADER_LEN)
                     .ok_or(DBusError::ReadBufIsTooShort)?;
-                Ok(Some(DBusWants::Read {
+                Ok(DBusWantsRead {
                     buf: remainder,
                     seq: self.seq,
-                }))
+                })
             }
 
             State::ReadBody {
@@ -49,12 +45,11 @@ impl DBusReader {
                 let remainder = buf
                     .get_mut(bytes_read..message_len)
                     .ok_or(DBusError::ReadBufIsTooShort)?;
-                Ok(Some(DBusWants::Read {
+                Ok(DBusWantsRead {
                     buf: remainder,
                     seq: self.seq,
-                }))
+                })
             }
-            State::Dead => Ok(None),
         }
     }
 
@@ -108,12 +103,6 @@ impl DBusReader {
                     Ok(None)
                 }
             }
-
-            State::Dead => Ok(None),
         }
-    }
-
-    pub(crate) const fn stop(&mut self) {
-        self.state = State::Dead;
     }
 }
