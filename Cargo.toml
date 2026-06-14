@@ -8,5 +8,5 @@ authors = ["Ilya Bylich <ibylich@gmail.com>"]
 description = "Sans-IO implementation of DBus protocol"
 
 [dev-dependencies]
-anyhow = "1.0"
+anyhow = "1"
 rustix = { version = "1", features = ["fs", "event", "net"] }

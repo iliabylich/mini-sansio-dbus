@@ -37,15 +37,12 @@ where
         encoder.set_member("GetLayout")?;
         dbus_body!(encoder, {
             i32(0),
-            i32(1),
+            i32(-1),
             array<str> [
                 "type",
                 "label",
                 "enabled",
                 "visible",
-                "icon-name",
-                "icon-data",
-                "shortcut",
                 "toggle-type",
                 "toggle-state",
                 "children-display",
