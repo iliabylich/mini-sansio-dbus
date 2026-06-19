@@ -28,7 +28,10 @@ impl<'a> HeaderField<'a> {
             };
         }
         match code {
-            HeaderFieldCode::Invalid => unreachable!(),
+            // The field code comes straight off the wire; any byte outside 1..=9 maps to
+            // `Invalid`, so this arm is reachable on malformed input and must not panic.
+            // (`HeaderFields::cut` already handles the `Invalid` variant gracefully.)
+            HeaderFieldCode::Invalid => Err(DBusError::MalformedHeaderField),
 
             HeaderFieldCode::Path => {
                 ensure_header_sig!("o", "Path");
