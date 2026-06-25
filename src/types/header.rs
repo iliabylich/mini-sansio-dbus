@@ -1,5 +1,5 @@
 #[repr(C, packed)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct Header {
     pub(crate) _endian: u8,
     pub(crate) message_type: u8,

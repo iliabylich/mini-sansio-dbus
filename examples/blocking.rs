@@ -41,7 +41,6 @@ fn main() -> Result<()> {
         }
     };
     println!("Connected!");
-    drop(connector);
 
     let mut queue = ExampleQueue::new();
     queue.push_and_discard_reply::<Hello>(())?;

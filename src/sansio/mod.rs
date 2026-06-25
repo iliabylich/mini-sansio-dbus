@@ -12,6 +12,7 @@ mod writer;
 
 /// A `DBus` connection, the main type
 #[must_use]
+#[derive(Debug, Clone, Copy)]
 pub struct DBusConnection {
     reader: DBusReader,
     writer: DBusWriter,

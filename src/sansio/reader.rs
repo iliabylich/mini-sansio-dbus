@@ -2,6 +2,7 @@ use crate::{DBusError, DBusWantsRead, types::Header};
 
 const HEADER_LEN: usize = size_of::<Header>();
 
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct DBusReader {
     state: State,
     seq: u64,

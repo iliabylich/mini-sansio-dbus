@@ -18,6 +18,7 @@ const GUID_LENGTH: usize = 37;
 
 /// A state machine type to authenticate in `DBus`
 #[must_use]
+#[derive(Debug, Clone, Copy)]
 pub struct DBusConnector {
     state: State,
     seq: u64,

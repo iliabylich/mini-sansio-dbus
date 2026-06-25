@@ -1,5 +1,6 @@
 use crate::{DBusError, DBusWantsWrite, sansio::OutgoingQueue};
 
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct DBusWriter {
     bytes_written: usize,
     seq: u64,
