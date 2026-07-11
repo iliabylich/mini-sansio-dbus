@@ -35,7 +35,7 @@ impl DBusConnection {
     ///
     /// Returns an error if given `readbuf` is too short
     pub fn wants<'r, 'w, Q>(
-        &mut self,
+        &self,
         queue: &'w Q,
         readbuf: &'r mut [u8],
     ) -> Result<(DBusWantsRead<'r>, Option<DBusWantsWrite<'w>>), DBusError>
