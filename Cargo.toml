@@ -9,4 +9,4 @@ description = "Sans-IO implementation of DBus protocol"
 
 [dev-dependencies]
 anyhow = "1"
-rustix = { version = "1", features = ["fs", "event", "net"] }
+rustix = { version = "1", features = ["fs", "event", "net", "time"] }

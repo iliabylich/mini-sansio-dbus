@@ -1,15 +1,12 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body, messaging::DBusEncode};
 
 /// Represents a request to subscribe to something in `DBus`
 pub struct AddMatch;
 
-impl AddMatch {
-    /// Writes an "add match" message to a given buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given buffer.
-    pub fn encode<'a>(buf: &'a mut [u8], rule: &str) -> Result<&'a [u8], EncodeError> {
+impl DBusEncode for AddMatch {
+    type Args<'a> = &'a str;
+
+    fn encode<'a>(rule: Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path("/org/freedesktop/DBus")?;
         encoder.set_member("AddMatch")?;

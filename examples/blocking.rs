@@ -43,7 +43,7 @@ fn main() -> Result<()> {
     println!("Connected!");
 
     let mut queue = ExampleQueue::new();
-    queue.push_and_discard_reply::<Hello>(())?;
+    queue.push_without_reply::<Hello>(())?;
 
     let mut dbus = DBusConnection::new(seq);
     loop {

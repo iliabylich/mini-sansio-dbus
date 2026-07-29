@@ -1,18 +1,14 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body, messaging::DBusEncode};
 
 /// Represents a "no such method" error reply
 pub struct ErrorNoMethod;
 
-impl ErrorNoMethod {
-    /// Encodes "no such method" error reply into given buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if given `buf` is too short
-    pub fn encode<'a>(
+impl DBusEncode for ErrorNoMethod {
+    type Args<'a> = (&'a str, u32);
+
+    fn encode<'a>(
+        (destination, reply_serial): Self::Args<'_>,
         buf: &'a mut [u8],
-        destination: &str,
-        reply_serial: u32,
     ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::Error)?;
         encoder.set_error_name("org.freedesktop.DBus.Error.UnknownMethod")?;

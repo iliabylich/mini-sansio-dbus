@@ -260,6 +260,7 @@ fn add_all(values: &[usize]) -> Result<usize, DBusError> {
     })
 }
 
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct CompleteTypeStructFieldsIter<'a> {
     fields: &'a str,
 }

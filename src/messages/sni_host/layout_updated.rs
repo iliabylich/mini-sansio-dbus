@@ -18,11 +18,13 @@ impl DBusEncode for LayoutUpdatedSubscribe {
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         Subscribe::encode(
+            (
+                Some(address),
+                Some(path),
+                Some("com.canonical.dbusmenu"),
+                Some("LayoutUpdated"),
+            ),
             buf,
-            Some(address),
-            Some(path),
-            Some("com.canonical.dbusmenu"),
-            Some("LayoutUpdated"),
         )
     }
 }
@@ -41,11 +43,13 @@ impl DBusEncode for LayoutUpdatedUnsubscribe {
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         Unsubscribe::encode(
+            (
+                Some(address),
+                Some(path),
+                Some("com.canonical.dbusmenu"),
+                Some("LayoutUpdated"),
+            ),
             buf,
-            Some(address),
-            Some(path),
-            Some("com.canonical.dbusmenu"),
-            Some("LayoutUpdated"),
         )
     }
 }

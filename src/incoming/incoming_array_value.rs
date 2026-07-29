@@ -4,7 +4,7 @@ use crate::{
 };
 
 /// Array value that is a part of incoming message
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[must_use]
 pub struct IncomingArrayValue<'a> {
     item_type: IncomingCompleteType<'a>,
@@ -42,10 +42,17 @@ impl<'a> IncomingArrayValue<'a> {
             cur: self.cur,
         }
     }
+
+    /// Returns true if this array has no items
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.cur.buf().is_empty()
+    }
 }
 
 /// An iterator over `IncomingArrayValue`
 #[must_use]
+#[derive(Debug, Clone, Copy)]
 pub struct IncomingArrayValueIter<'a> {
     item_type: IncomingCompleteType<'a>,
     cur: Cursor<'a>,

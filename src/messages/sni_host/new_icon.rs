@@ -15,11 +15,13 @@ impl DBusEncode for NewIconSubscribe {
 
     fn encode<'a>(address: Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         Subscribe::encode(
+            (
+                Some(address),
+                Some("/StatusNotifierItem"),
+                Some("org.kde.StatusNotifierItem"),
+                Some("NewIcon"),
+            ),
             buf,
-            Some(address),
-            Some("/StatusNotifierItem"),
-            Some("org.kde.StatusNotifierItem"),
-            Some("NewIcon"),
         )
     }
 }
@@ -35,11 +37,13 @@ impl DBusEncode for NewIconUnsubscribe {
 
     fn encode<'a>(address: Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         Unsubscribe::encode(
+            (
+                Some(address),
+                Some("/StatusNotifierItem"),
+                Some("org.kde.StatusNotifierItem"),
+                Some("NewIcon"),
+            ),
             buf,
-            Some(address),
-            Some("/StatusNotifierItem"),
-            Some("org.kde.StatusNotifierItem"),
-            Some("NewIcon"),
         )
     }
 }

@@ -18,11 +18,13 @@ impl DBusEncode for ItemsPropertiesUpdatedSubscribe {
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         Subscribe::encode(
+            (
+                Some(address),
+                Some(path),
+                Some("com.canonical.dbusmenu"),
+                Some("ItemsPropertiesUpdated"),
+            ),
             buf,
-            Some(address),
-            Some(path),
-            Some("com.canonical.dbusmenu"),
-            Some("ItemsPropertiesUpdated"),
         )
     }
 }
@@ -41,11 +43,13 @@ impl DBusEncode for ItemsPropertiesUpdatedUnsubscribe {
         buf: &'a mut [u8],
     ) -> Result<&'a [u8], EncodeError> {
         Unsubscribe::encode(
+            (
+                Some(address),
+                Some(path),
+                Some("com.canonical.dbusmenu"),
+                Some("ItemsPropertiesUpdated"),
+            ),
             buf,
-            Some(address),
-            Some(path),
-            Some("com.canonical.dbusmenu"),
-            Some("ItemsPropertiesUpdated"),
         )
     }
 }

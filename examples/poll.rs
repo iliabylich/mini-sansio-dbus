@@ -47,7 +47,7 @@ fn main() -> Result<()> {
     println!("Connected!");
 
     let mut queue = ExampleQueue::new();
-    queue.push_and_discard_reply::<Hello>(())?;
+    queue.push_without_reply::<Hello>(())?;
     let primary_connection_path_reply_handler = {
         let mut buf = [0; 1_024];
         let buf = PrimaryConnection.encode_get(&mut buf)?;

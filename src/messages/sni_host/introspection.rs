@@ -1,6 +1,6 @@
 use crate::{
     EncodeError, IncomingMessage, IntrospectibleObjectAt, IntrospectibleObjectAtRequest,
-    MessageType, SliceMessageEncoder, dbus_body, messages::ErrorNoMethod,
+    MessageType, SliceMessageEncoder, dbus_body, messages::ErrorNoMethod, messaging::DBusEncode,
 };
 
 /// Helper struct to handle introspection requests for (K)SNI host
@@ -28,7 +28,7 @@ impl StatusNotifierWatcherIntrospection {
         serial: u32,
         destination: &str,
     ) -> Result<&'a [u8], EncodeError> {
-        ErrorNoMethod::encode(buf, destination, serial)
+        ErrorNoMethod::encode((destination, serial), buf)
     }
 
     fn encode_reply_with_body<'a>(

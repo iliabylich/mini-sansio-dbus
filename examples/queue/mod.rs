@@ -30,7 +30,7 @@ impl ExampleQueue {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn push_and_prepare_for_reply<M>(
+    pub(crate) fn push_with_reply<M>(
         &mut self,
         message: M,
         args: M::Args<'_>,
@@ -38,18 +38,18 @@ impl ExampleQueue {
     where
         M: DBusEncode + HandleReply,
     {
-        let mut buf = [0; 1_024];
+        let mut buf = [0; 8 * 1_024];
         let buf = M::encode(args, &mut buf)?;
         let handler = self.push_raw_and_prepare_for_reply(message, buf);
         Ok(handler)
     }
 
     #[allow(dead_code)]
-    pub(crate) fn push_and_discard_reply<M>(&mut self, args: M::Args<'_>) -> Result<(), EncodeError>
+    pub(crate) fn push_without_reply<M>(&mut self, args: M::Args<'_>) -> Result<(), EncodeError>
     where
         M: DBusEncode,
     {
-        let mut buf = [0; 1_024];
+        let mut buf = [0; 8 * 1_024];
         let buf = M::encode(args, &mut buf)?;
         let _ = self.push_raw(buf);
         Ok(())

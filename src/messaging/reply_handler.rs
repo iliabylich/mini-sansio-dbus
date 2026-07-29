@@ -6,7 +6,8 @@ pub struct ReplyHandler<T>
 where
     T: HandleReply,
 {
-    serial: u32,
+    /// `Serial` of the sent message, or `ReplySerial` of the reply message that we expect to receive
+    pub serial: u32,
     handler: T,
 }
 

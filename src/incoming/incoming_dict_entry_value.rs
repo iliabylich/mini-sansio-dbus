@@ -4,7 +4,7 @@ use crate::{
 };
 
 /// Represents a received dict entry (a key/value pair)
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[must_use]
 pub struct IncomingDictEntryValue<'a> {
     key_type: IncomingCompleteType<'a>,

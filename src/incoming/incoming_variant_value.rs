@@ -4,7 +4,7 @@ use crate::{
 };
 
 /// Represents a variant value known only at runtime
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[must_use]
 pub struct IncomingVariantValue<'a> {
     cur: Cursor<'a>,

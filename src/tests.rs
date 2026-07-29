@@ -1,6 +1,7 @@
 use crate::{
     DBusError, EncodeError, IncomingMessage, IncomingValue, MessageType, SliceMessageEncoder,
     dbus_body, dbus_body_fragment, messages::org_freedesktop_dbus::SetProperty,
+    messaging::DBusEncode,
 };
 
 const MESSAGE_BLOB: &[u8] = &[
@@ -209,18 +210,21 @@ fn decodes_message_from_same_in_memory_blob() -> Result<(), DBusError> {
 #[test]
 fn set_property_encodes_string_variant() -> Result<(), DBusError> {
     let mut buf = [0; 512];
+    let write_value = |encoder: &mut SliceMessageEncoder<'_>| {
+        dbus_body_fragment!(encoder, {
+            variant<str>("online"),
+        });
+        Ok(())
+    };
     let buf = SetProperty::encode(
+        (
+            "org.example.Service",
+            "/org/example/Object",
+            "org.example.Interface",
+            "Name",
+            &write_value,
+        ),
         &mut buf,
-        "org.example.Service",
-        "/org/example/Object",
-        "org.example.Interface",
-        "Name",
-        |encoder: &mut SliceMessageEncoder<'_>| {
-            dbus_body_fragment!(encoder, {
-                variant<str>("online"),
-            });
-            Ok(())
-        },
     )?;
     let decoded = IncomingMessage::new(buf)?;
 
@@ -257,18 +261,21 @@ fn set_property_encodes_string_variant() -> Result<(), DBusError> {
 fn set_property_encodes_array_variant() -> Result<(), DBusError> {
     let mut buf = [0; 512];
     let values = [1u32, 2, 3];
+    let write_value = |encoder: &mut SliceMessageEncoder<'_>| {
+        dbus_body_fragment!(encoder, {
+            variant<array<u32>> [values[0], values[1], values[2]],
+        });
+        Ok(())
+    };
     let buf = SetProperty::encode(
+        (
+            "org.example.Service",
+            "/org/example/Object",
+            "org.example.Interface",
+            "Values",
+            &write_value,
+        ),
         &mut buf,
-        "org.example.Service",
-        "/org/example/Object",
-        "org.example.Interface",
-        "Values",
-        |encoder: &mut SliceMessageEncoder<'_>| {
-            dbus_body_fragment!(encoder, {
-                variant<array<u32>> [values[0], values[1], values[2]],
-            });
-            Ok(())
-        },
     )?;
     let decoded = IncomingMessage::new(buf)?;
 

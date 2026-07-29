@@ -1,19 +1,14 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body, messaging::DBusEncode};
 
 /// Represents a request to get all object properties
 pub struct GetAllProperties;
 
-impl GetAllProperties {
-    /// Writes a "get" message to a given buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given buffer.
-    pub fn encode<'a>(
+impl DBusEncode for GetAllProperties {
+    type Args<'a> = (&'a str, &'a str, &'a str);
+
+    fn encode<'a>(
+        (destination, path, interface): Self::Args<'_>,
         buf: &'a mut [u8],
-        destination: &str,
-        path: &str,
-        interface: &str,
     ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path(path)?;

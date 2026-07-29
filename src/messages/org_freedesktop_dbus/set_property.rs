@@ -1,21 +1,22 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body_fragment};
+use crate::{
+    EncodeError, MessageType, SliceMessageEncoder, dbus_body_fragment, messaging::DBusEncode,
+};
 
 /// Represents a request to set a single property on a given `DBus` object
 pub struct SetProperty;
 
-impl SetProperty {
-    /// Writes a "set property" message to a given buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given buffer.
-    pub fn encode<'a>(
+impl DBusEncode for SetProperty {
+    type Args<'a> = (
+        &'a str,
+        &'a str,
+        &'a str,
+        &'a str,
+        &'a dyn Fn(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,
+    );
+
+    fn encode<'a>(
+        (destination, path, interface, property, value): Self::Args<'_>,
         buf: &'a mut [u8],
-        destination: &str,
-        path: &str,
-        interface: &str,
-        property: &str,
-        value: impl Fn(&mut SliceMessageEncoder<'_>) -> Result<(), EncodeError>,
     ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path(path)?;

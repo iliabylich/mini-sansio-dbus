@@ -4,7 +4,7 @@ use crate::{
 };
 
 /// Received struct (an array of dict entries)
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[must_use]
 pub struct IncomingStructValue<'a> {
     struct_type: IncomingCompleteType<'a>,
@@ -31,6 +31,7 @@ impl<'a> IncomingStructValue<'a> {
 
 /// An iterator over `IncomingStructValue`
 #[must_use]
+#[derive(Debug, Clone, Copy)]
 pub struct IncomingStructValueIter<'a> {
     field_type_iter: CompleteTypeStructFieldsIter<'a>,
     cur: Cursor<'a>,

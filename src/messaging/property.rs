@@ -1,7 +1,7 @@
 use crate::{
     Conf, DBusError, EncodeError, IncomingBody, IncomingMessage, IncomingValue, MessageType,
     messages::org_freedesktop_dbus::{GetProperty, Subscribe, Unsubscribe},
-    messaging::reply_handler::HandleReply,
+    messaging::{DBusEncode, reply_handler::HandleReply},
     value_is,
 };
 
@@ -35,11 +35,13 @@ pub trait Property: Clone {
     /// Returns an error if given buffer is too short
     fn encode_subscribe<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         Subscribe::encode(
+            (
+                Some(Self::DESTINATION.resolve(self)),
+                Some(Self::PATH.resolve(self)),
+                Some("org.freedesktop.DBus.Properties"),
+                Some("PropertiesChanged"),
+            ),
             buf,
-            Some(Self::DESTINATION.resolve(self)),
-            Some(Self::PATH.resolve(self)),
-            Some("org.freedesktop.DBus.Properties"),
-            Some("PropertiesChanged"),
         )
     }
 
@@ -50,11 +52,13 @@ pub trait Property: Clone {
     /// Returns an error if given buffer is too short
     fn encode_unsubscribe<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         Unsubscribe::encode(
+            (
+                Some(Self::DESTINATION.resolve(self)),
+                Some(Self::PATH.resolve(self)),
+                Some("org.freedesktop.DBus.Properties"),
+                Some("PropertiesChanged"),
+            ),
             buf,
-            Some(Self::DESTINATION.resolve(self)),
-            Some(Self::PATH.resolve(self)),
-            Some("org.freedesktop.DBus.Properties"),
-            Some("PropertiesChanged"),
         )
     }
 
@@ -65,11 +69,13 @@ pub trait Property: Clone {
     /// Returns an error if given buffer is too short.
     fn encode_get<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         GetProperty::encode(
+            (
+                Self::DESTINATION.resolve(self),
+                Self::PATH.resolve(self),
+                Self::INTERFACE.resolve(self),
+                Self::PROPERTY_NAME.resolve(self),
+            ),
             buf,
-            Self::DESTINATION.resolve(self),
-            Self::PATH.resolve(self),
-            Self::INTERFACE.resolve(self),
-            Self::PROPERTY_NAME.resolve(self),
         )
     }
 

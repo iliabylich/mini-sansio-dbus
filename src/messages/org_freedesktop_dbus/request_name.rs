@@ -1,15 +1,12 @@
-use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body};
+use crate::{EncodeError, MessageType, SliceMessageEncoder, dbus_body, messaging::DBusEncode};
 
 /// Represents a request to `DBus` to occupy some name
 pub struct RequestName;
 
-impl RequestName {
-    /// Writes a "request name" message to a given buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given buffer.
-    pub fn encode<'a>(buf: &'a mut [u8], name: &str) -> Result<&'a [u8], EncodeError> {
+impl DBusEncode for RequestName {
+    type Args<'a> = &'a str;
+
+    fn encode<'a>(name: Self::Args<'_>, buf: &'a mut [u8]) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodCall)?;
         encoder.set_path("/org/freedesktop/DBus")?;
         encoder.set_member("RequestName")?;

@@ -1,6 +1,6 @@
 use crate::{
     DBusError, EncodeError, MessageType, SliceMessageEncoder, dbus_body, incoming::IncomingMessage,
-    interface_is, member_is, path_is,
+    interface_is, member_is, messaging::DBusEncode, path_is,
 };
 
 /// Low-level introspection request received from `DBus`
@@ -89,17 +89,12 @@ impl<'a> TryFrom<IncomingMessage<'a>> for IntrospectRequest<'a> {
 /// Low-level introspection response to send to `DBus`
 pub struct IntrospectResponse;
 
-impl IntrospectResponse {
-    /// Writes an introspection response message to a given buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if message doesn't fit into given buffer.
-    pub fn encode<'a>(
+impl DBusEncode for IntrospectResponse {
+    type Args<'a> = (u32, &'a str, &'a str);
+
+    fn encode<'a>(
+        (reply_serial, destination, xml): Self::Args<'_>,
         buf: &'a mut [u8],
-        reply_serial: u32,
-        destination: &str,
-        xml: &str,
     ) -> Result<&'a [u8], EncodeError> {
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
         encoder.set_reply_serial(reply_serial)?;

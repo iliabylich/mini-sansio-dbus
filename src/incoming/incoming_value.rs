@@ -5,7 +5,7 @@ use crate::{
 };
 
 /// Represents an abstract received value
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[must_use]
 pub enum IncomingValue<'a> {
     /// A single byte number

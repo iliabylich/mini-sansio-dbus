@@ -2,6 +2,7 @@ mod add_match;
 mod get_all_properties;
 mod get_property;
 mod hello;
+mod name_has_owner;
 mod name_owner_changed;
 mod remove_match;
 mod request_name;
@@ -14,6 +15,7 @@ pub use add_match::AddMatch;
 pub use get_all_properties::GetAllProperties;
 pub use get_property::GetProperty;
 pub use hello::Hello;
+pub use name_has_owner::NameHasOwner;
 pub use name_owner_changed::{
     NameOwnerChangedSignal, NameOwnerChangedSubscribe, NameOwnerChangedUnsubscribe,
 };
