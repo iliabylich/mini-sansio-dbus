@@ -1,9 +1,12 @@
 use crate::messages::sni_client::dbusmenu::{DBusMenuEvent, DBusMenuItem};
 
 /// Server-side menu state for a `com.canonical.dbusmenu` object
-pub trait DBusMenuData {
+pub trait DBusMenuData<S>
+where
+    S: AsRef<str> + 'static,
+{
     /// Root menu list type
-    type List: DBusMenuList;
+    type List: DBusMenuList<S>;
 
     /// Layout revision. Increment this whenever the menu layout changes
     fn revision(&self) -> u32;
@@ -21,7 +24,11 @@ pub trait DBusMenuData {
 }
 
 /// A list of dbusmenu items
-pub trait DBusMenuList: Sized {
+pub trait DBusMenuList<S>
+where
+    Self: Sized,
+    S: AsRef<str> + 'static,
+{
     /// Returns an iterator over the list
-    fn iter(&self) -> impl Iterator<Item = &DBusMenuItem<'_, Self>>;
+    fn iter(&self) -> impl Iterator<Item = &DBusMenuItem<Self, S>>;
 }

@@ -249,7 +249,7 @@ struct ExampleTrayMenu {
     checkbox_checked: bool,
     radio_selected: i32,
     exit_requested: bool,
-    menu: MenuList<'static>,
+    menu: MenuList,
 }
 
 impl ExampleTrayMenu {
@@ -337,8 +337,8 @@ impl StatusNotifierItemData for ExampleTrayMenu {
     }
 }
 
-impl DBusMenuData for ExampleTrayMenu {
-    type List = MenuList<'static>;
+impl DBusMenuData<&'static str> for ExampleTrayMenu {
+    type List = MenuList;
 
     fn revision(&self) -> u32 {
         self.revision
@@ -377,9 +377,9 @@ impl DBusMenuData for ExampleTrayMenu {
     }
 }
 
-struct MenuList<'a>(Vec<DBusMenuItem<'a, MenuList<'a>>>);
+struct MenuList(Vec<DBusMenuItem<MenuList, &'static str>>);
 
-impl MenuList<'static> {
+impl MenuList {
     fn new(flip: bool, checkbox_checked: bool, radio_selected: i32) -> Self {
         Self(vec![
             DBusMenuItem::Regular {
@@ -467,8 +467,8 @@ impl MenuList<'static> {
     }
 }
 
-impl DBusMenuList for MenuList<'_> {
-    fn iter(&self) -> impl Iterator<Item = &DBusMenuItem<'_, Self>> {
+impl DBusMenuList<&'static str> for MenuList {
+    fn iter(&self) -> impl Iterator<Item = &DBusMenuItem<Self, &'static str>> {
         self.0.iter()
     }
 }

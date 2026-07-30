@@ -36,13 +36,16 @@ impl StatusNotifierMenuHandler {
     /// # Errors
     ///
     /// Returns an error if the reply cannot be encoded into `buf`
-    pub fn handle<'a>(
+    pub fn handle<'a, S>(
         buf: &'a mut [u8],
         message: IncomingMessage<'_>,
         destination: &str,
         path: &str,
-        data: &mut impl DBusMenuData,
-    ) -> Result<Option<&'a [u8]>, DBusError> {
+        data: &mut impl DBusMenuData<S>,
+    ) -> Result<Option<&'a [u8]>, DBusError>
+    where
+        S: AsRef<str> + 'static,
+    {
         let Some(sender) = message.sender else {
             return Ok(None);
         };
@@ -88,11 +91,14 @@ impl StatusNotifierMenuHandler {
     }
 }
 
-fn about_to_show_group(
+fn about_to_show_group<S>(
     ids: IncomingArrayValue<'_>,
-    data: &mut impl DBusMenuData,
+    data: &mut impl DBusMenuData<S>,
     mut write_update: impl FnMut(i32) -> Result<(), EncodeError>,
-) -> Result<(), DBusError> {
+) -> Result<(), DBusError>
+where
+    S: AsRef<str> + 'static,
+{
     let mut iter = ids.items_iter();
     while let Some(value) = iter.try_next()? {
         value_is!(value, IncomingValue::Int32(id));
@@ -104,10 +110,13 @@ fn about_to_show_group(
     Ok(())
 }
 
-fn handle_event_group(
+fn handle_event_group<S>(
     events: IncomingArrayValue<'_>,
-    data: &mut impl DBusMenuData,
-) -> Result<(), DBusError> {
+    data: &mut impl DBusMenuData<S>,
+) -> Result<(), DBusError>
+where
+    S: AsRef<str> + 'static,
+{
     let mut events = events.items_iter();
     while let Some(value) = events.try_next()? {
         value_is!(value, IncomingValue::Struct(event));
@@ -177,13 +186,16 @@ fn about_to_show_reply<'a>(
     })
 }
 
-fn about_to_show_group_reply<'a>(
+fn about_to_show_group_reply<'a, S>(
     buf: &'a mut [u8],
     serial: u32,
     destination: &str,
     ids: IncomingArrayValue<'_>,
-    data: &mut impl DBusMenuData,
-) -> Result<&'a [u8], DBusError> {
+    data: &mut impl DBusMenuData<S>,
+) -> Result<&'a [u8], DBusError>
+where
+    S: AsRef<str> + 'static,
+{
     reply(buf, serial, destination, |encoder| {
         encoder.set_body_signature("aiai")?;
         encoder.__dbus_begin_body()?;

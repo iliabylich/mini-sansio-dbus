@@ -1,6 +1,6 @@
 use crate::{EncodeError, SliceMessageEncoder};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Property {
     Version,
     TextDirection,

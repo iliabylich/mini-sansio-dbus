@@ -7,13 +7,16 @@ use crate::{
 pub struct GetGroupProperties;
 
 impl GetGroupProperties {
-    pub(crate) fn reply<'a>(
+    pub(crate) fn reply<'a, S>(
         buf: &'a mut [u8],
         serial: u32,
         destination: &str,
-        data: &impl DBusMenuData,
+        data: &impl DBusMenuData<S>,
         ids: IncomingArrayValue<'_>,
-    ) -> Result<&'a [u8], DBusError> {
+    ) -> Result<&'a [u8], DBusError>
+    where
+        S: AsRef<str> + 'static,
+    {
         let menu_list = data.menu();
 
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
@@ -45,10 +48,13 @@ impl GetGroupProperties {
     }
 }
 
-fn traverse_root_properties(
+fn traverse_root_properties<S>(
     encoder: &mut SliceMessageEncoder<'_>,
-    list: &impl DBusMenuList,
-) -> Result<(), EncodeError> {
+    list: &impl DBusMenuList<S>,
+) -> Result<(), EncodeError>
+where
+    S: AsRef<str> + 'static,
+{
     encoder.__dbus_align(8)?;
     encoder.__dbus_write_i32(0)?;
     let properties = encoder.__dbus_start_array(8)?;
@@ -62,20 +68,26 @@ fn traverse_root_properties(
     traverse_list_properties(encoder, list)
 }
 
-fn traverse_list_properties(
+fn traverse_list_properties<S>(
     encoder: &mut SliceMessageEncoder<'_>,
-    list: &impl DBusMenuList,
-) -> Result<(), EncodeError> {
+    list: &impl DBusMenuList<S>,
+) -> Result<(), EncodeError>
+where
+    S: AsRef<str> + 'static,
+{
     for item in list.iter() {
         traverse_item_properties(encoder, item)?;
     }
     Ok(())
 }
 
-fn traverse_item_properties(
+fn traverse_item_properties<S>(
     encoder: &mut SliceMessageEncoder<'_>,
-    item: &DBusMenuItem<'_, impl DBusMenuList>,
-) -> Result<(), EncodeError> {
+    item: &DBusMenuItem<impl DBusMenuList<S>, S>,
+) -> Result<(), EncodeError>
+where
+    S: AsRef<str> + 'static,
+{
     encoder.__dbus_align(8)?;
     encoder.__dbus_write_i32(item.id())?;
     item.encode(encoder)?;

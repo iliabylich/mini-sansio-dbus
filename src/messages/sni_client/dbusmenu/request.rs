@@ -4,7 +4,7 @@ use crate::{
     value_is,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Request<'a> {
     GetAllProperties,
     GetProperty { property: Property },

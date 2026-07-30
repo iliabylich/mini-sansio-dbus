@@ -6,14 +6,17 @@ use crate::{
 pub struct GetLayout;
 
 impl GetLayout {
-    pub(crate) fn reply<'a>(
+    pub(crate) fn reply<'a, S>(
         buf: &'a mut [u8],
         serial: u32,
         destination: &str,
-        data: &impl DBusMenuData,
+        data: &impl DBusMenuData<S>,
         parent: i32,
         depth: i32,
-    ) -> Result<&'a [u8], DBusError> {
+    ) -> Result<&'a [u8], DBusError>
+    where
+        S: AsRef<str> + 'static,
+    {
         let menu_list = data.menu();
 
         let mut encoder = SliceMessageEncoder::new(buf, MessageType::MethodReturn)?;
@@ -34,11 +37,14 @@ impl GetLayout {
     }
 }
 
-fn traverse_root(
+fn traverse_root<S>(
     encoder: &mut SliceMessageEncoder<'_>,
-    list: &impl DBusMenuList,
+    list: &impl DBusMenuList<S>,
     depth: i32,
-) -> Result<(), EncodeError> {
+) -> Result<(), EncodeError>
+where
+    S: AsRef<str> + 'static,
+{
     encoder.__dbus_align(8)?;
     encoder.__dbus_write_i32(0)?;
 
@@ -58,22 +64,28 @@ fn traverse_root(
     encoder.__dbus_finish_array(children)
 }
 
-fn traverse_list(
+fn traverse_list<S>(
     encoder: &mut SliceMessageEncoder<'_>,
-    list: &impl DBusMenuList,
+    list: &impl DBusMenuList<S>,
     depth: i32,
-) -> Result<(), EncodeError> {
+) -> Result<(), EncodeError>
+where
+    S: AsRef<str> + 'static,
+{
     for item in list.iter() {
         traverse_item(encoder, item, depth)?;
     }
     Ok(())
 }
 
-fn traverse_item(
+fn traverse_item<S>(
     encoder: &mut SliceMessageEncoder<'_>,
-    item: &DBusMenuItem<'_, impl DBusMenuList>,
+    item: &DBusMenuItem<impl DBusMenuList<S>, S>,
     depth: i32,
-) -> Result<(), EncodeError> {
+) -> Result<(), EncodeError>
+where
+    S: AsRef<str> + 'static,
+{
     encoder.__dbus_write_signature_value("(ia{sv}av)")?;
     encoder.__dbus_align(8)?;
     encoder.__dbus_write_i32(item.id())?;

@@ -2,13 +2,17 @@ use crate::{EncodeError, SliceMessageEncoder, messages::sni_client::dbusmenu::DB
 
 /// A dbusmenu item
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DBusMenuItem<'a, List> {
+pub enum DBusMenuItem<List, S>
+where
+    S: AsRef<str> + 'static,
+    List: DBusMenuList<S>,
+{
     /// A simple clickable item
     Regular {
         /// Stable item id within this menu
         id: i32,
         /// User-visible label
-        label: &'a str,
+        label: S,
         /// Whether the item is enabled
         enabled: bool,
         /// Whether the item is visible
@@ -19,7 +23,7 @@ pub enum DBusMenuItem<'a, List> {
         /// Stable item id within this menu
         id: i32,
         /// User-visible label
-        label: &'a str,
+        label: S,
         /// Whether the checkbox is checked
         checked: bool,
         /// Whether the item is enabled
@@ -32,7 +36,7 @@ pub enum DBusMenuItem<'a, List> {
         /// Stable item id within this menu
         id: i32,
         /// User-visible label
-        label: &'a str,
+        label: S,
         /// Whether the radio item is selected
         selected: bool,
         /// Whether the item is enabled
@@ -52,7 +56,7 @@ pub enum DBusMenuItem<'a, List> {
         /// Stable item id within this menu
         id: i32,
         /// User-visible label
-        label: &'a str,
+        label: S,
         /// Whether the item is enabled
         enabled: bool,
         /// Whether the item is visible
@@ -62,7 +66,11 @@ pub enum DBusMenuItem<'a, List> {
     },
 }
 
-impl<'a, List> DBusMenuItem<'a, List> {
+impl<List, S> DBusMenuItem<List, S>
+where
+    S: AsRef<str>,
+    List: DBusMenuList<S>,
+{
     pub(crate) const fn id(&self) -> i32 {
         match self {
             Self::Regular { id, .. }
@@ -77,54 +85,54 @@ impl<'a, List> DBusMenuItem<'a, List> {
         let properties = encoder.__dbus_start_array(8)?;
 
         match self {
-            DBusMenuItem::Regular {
+            Self::Regular {
                 label,
                 visible,
                 enabled,
                 ..
             } => {
-                write_property_str(encoder, "label", label)?;
+                write_property_str(encoder, "label", label.as_ref())?;
                 write_property_bool(encoder, "visible", *visible)?;
                 write_property_bool(encoder, "enabled", *enabled)?;
             }
-            DBusMenuItem::Checkbox {
+            Self::Checkbox {
                 label,
                 checked,
                 visible,
                 enabled,
                 ..
             } => {
-                write_property_str(encoder, "label", label)?;
+                write_property_str(encoder, "label", label.as_ref())?;
                 write_property_str(encoder, "toggle-type", "checkmark")?;
                 write_property_i32(encoder, "toggle-state", i32::from(*checked))?;
                 write_property_bool(encoder, "visible", *visible)?;
                 write_property_bool(encoder, "enabled", *enabled)?;
             }
-            DBusMenuItem::Radio {
+            Self::Radio {
                 label,
                 selected,
                 visible,
                 enabled,
                 ..
             } => {
-                write_property_str(encoder, "label", label)?;
+                write_property_str(encoder, "label", label.as_ref())?;
                 write_property_str(encoder, "toggle-type", "radio")?;
                 write_property_i32(encoder, "toggle-state", i32::from(*selected))?;
                 write_property_bool(encoder, "visible", *visible)?;
                 write_property_bool(encoder, "enabled", *enabled)?;
             }
-            DBusMenuItem::Separator { visible, .. } => {
+            Self::Separator { visible, .. } => {
                 write_property_str(encoder, "type", "separator")?;
                 write_property_bool(encoder, "visible", *visible)?;
                 write_property_bool(encoder, "enabled", false)?;
             }
-            DBusMenuItem::Submenu {
+            Self::Submenu {
                 label,
                 visible,
                 enabled,
                 ..
             } => {
-                write_property_str(encoder, "label", label)?;
+                write_property_str(encoder, "label", label.as_ref())?;
                 write_property_str(encoder, "children-display", "submenu")?;
                 write_property_bool(encoder, "visible", *visible)?;
                 write_property_bool(encoder, "enabled", *enabled)?;
@@ -135,15 +143,12 @@ impl<'a, List> DBusMenuItem<'a, List> {
         Ok(())
     }
 
-    pub(crate) fn find_in(list: &'a List, id: i32) -> Option<&'a Self>
-    where
-        List: DBusMenuList,
-    {
+    pub(crate) fn find_in(list: &List, id: i32) -> Option<&Self> {
         for item in list.iter() {
             if item.id() == id {
                 return Some(item);
             }
-            if let DBusMenuItem::Submenu { children, .. } = item
+            if let Self::Submenu { children, .. } = item
                 && let Some(item) = Self::find_in(children, id)
             {
                 return Some(item);
